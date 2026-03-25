@@ -48,8 +48,41 @@ export async function GET() {
 
   const respText = await resp.text();
 
+  let newAccessToken = null;
+  let savedOk = false;
+  if (resp.ok) {
+    const json = JSON.parse(respText);
+    newAccessToken = json.access_token ? json.access_token.substring(0, 20) + "..." : null;
+    const newExpiresAt = new Date(Date.now() + json.expires_in * 1000).toISOString();
+    const { error: upsertErr } = await supabase.from("exact_tokens").upsert({
+      division: DIVISION,
+      company_name: fullRow?.company_name,
+      access_token: json.access_token,
+      refresh_token: json.refresh_token,
+      expires_at: newExpiresAt,
+      updated_at: new Date().toISOString(),
+    });
+    savedOk = !upsertErr;
+
+    // Test de Exact API met de nieuwe token
+    const testResp = await fetch(
+      `https://start.exactonline.nl/api/v1/${DIVISION}/current/Me?$select=CurrentDivision,FullName`,
+      { headers: { Authorization: `Bearer ${json.access_token}`, Accept: "application/json" } }
+    );
+    const testData = await testResp.text();
+
+    return NextResponse.json({
+      status: "refreshed",
+      refresh_http_status: resp.status,
+      new_expires_at: newExpiresAt,
+      token_saved: savedOk,
+      api_test_status: testResp.status,
+      api_test_response: testData.substring(0, 300),
+    });
+  }
+
   return NextResponse.json({
-    status: expired ? "token_expired_refresh_attempted" : "token_valid",
+    status: "refresh_failed",
     refresh_http_status: resp.status,
     refresh_response: respText.substring(0, 500),
     expires_at: data.expires_at,
