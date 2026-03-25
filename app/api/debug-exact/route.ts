@@ -22,8 +22,20 @@ export async function GET() {
   const now = Date.now();
   const expired = expiresAt <= now + 60_000;
 
-  if (!expired) {
-    return NextResponse.json({ status: "token_valid", expires_at: data.expires_at, division: data.division });
+  // Altijd de API testen — haal huidige access token op
+  const { data: tokenRow } = await supabase.from("exact_tokens").select("access_token").eq("division", DIVISION).single();
+  if (!expired && tokenRow?.access_token) {
+    const meResp = await fetch(
+      `https://start.exactonline.nl/api/v1/current/Me?$select=CurrentDivision,FullName`,
+      { headers: { Authorization: `Bearer ${tokenRow.access_token}`, Accept: "application/json" } }
+    );
+    const meData = await meResp.text();
+    return NextResponse.json({
+      status: "token_valid",
+      expires_at: data.expires_at,
+      division: data.division,
+      me_test: { status: meResp.status, body: meData.substring(0, 500) },
+    });
   }
 
   // Probeer refresh
