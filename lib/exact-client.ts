@@ -40,6 +40,8 @@ async function getValidAccessToken(): Promise<{ token: string; division: number 
   });
 
   if (!resp.ok) {
+    const errText = await resp.text();
+    console.error("[getValidAccessToken] Refresh failed:", resp.status, errText);
     throw new Error("Token vernieuwen mislukt. Koppel Exact Online opnieuw.");
   }
 
