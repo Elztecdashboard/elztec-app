@@ -7,7 +7,7 @@ function formatEur(bedrag: number) {
 
 export default async function FacturenPage() {
   const facturen = await getOpenstaandeFacturen().catch(() => []);
-  const totaal = facturen.reduce((s, f) => s + Number(f.Amount), 0);
+  const totaal = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
 
   return (
     <div className="space-y-4 max-w-5xl">
