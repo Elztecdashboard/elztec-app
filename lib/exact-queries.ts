@@ -7,16 +7,16 @@ interface ExactResponse {
 
 export async function getFinancialSummary(jaar: number): Promise<FinancialSummary> {
   const data = await exactFetch(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,Amount,Type&$filter=FinancialYear eq ${jaar}&$top=1000`
+    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC,Type&$filter=FinancialYear eq ${jaar}&$top=1000`
   ) as ExactResponse;
 
   const lines = data?.d?.results ?? [];
   let omzet = 0;
   let kosten = 0;
 
-  for (const line of lines as Array<{ Amount: number; GLAccountCode: string }>) {
+  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string }>) {
     const code = Number(line.GLAccountCode);
-    const amount = Number(line.Amount);
+    const amount = Number(line.AmountDC);
     // NL boekhoudconventie: omzet codes 8xxx, kosten codes 4xxx-7xxx
     if (code >= 8000 && code < 9000) {
       omzet += Math.abs(amount);
@@ -35,16 +35,16 @@ export async function getFinancialSummary(jaar: number): Promise<FinancialSummar
 
 export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[]> {
   const data = await exactFetch(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,Amount&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '8000' and GLAccountCode lt '9000'&$top=1000`
+    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '8000' and GLAccountCode lt '9000'&$top=1000`
   ) as ExactResponse;
 
   const lines = data?.d?.results ?? [];
   const grouped = new Map<string, { omschrijving: string; bedrag: number }>();
 
-  for (const line of lines as Array<{ Amount: number; GLAccountCode: string; GLAccountDescription: string }>) {
+  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; GLAccountDescription: string }>) {
     const code = line.GLAccountCode;
     const existing = grouped.get(code);
-    const amount = Math.abs(Number(line.Amount));
+    const amount = Math.abs(Number(line.AmountDC));
     if (existing) {
       existing.bedrag += amount;
     } else {
@@ -66,7 +66,7 @@ export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[
 
 export async function getOpenstaandeFacturen(): Promise<Receivable[]> {
   const data = await exactFetch(
-    `cashflow/Receivables?$select=AccountName,InvoiceNumber,Amount,DueDate,InvoiceDate,Description&$filter=CloseDate eq null&$orderby=DueDate asc`
+    `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate,Description&$filter=CloseDate eq null&$orderby=DueDate asc`
   ) as ExactResponse;
 
   return (data?.d?.results ?? []) as Receivable[];

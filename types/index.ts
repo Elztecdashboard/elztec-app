@@ -16,7 +16,7 @@ export interface ExactCacheRow {
 export interface Receivable {
   AccountName: string;
   InvoiceNumber: string;
-  Amount: number;
+  AmountDC: number;
   DueDate: string;
   InvoiceDate: string;
   Description: string;
@@ -37,7 +37,7 @@ export interface TransactionLine {
   GLAccount: string;
   GLAccountCode: string;
   GLAccountDescription: string;
-  Amount: number;
+  AmountDC: number;
   FinancialYear: number;
   FinancialPeriod: number;
   Type: number;

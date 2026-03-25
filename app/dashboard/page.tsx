@@ -28,7 +28,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     getOpenstaandeFacturen().catch(() => []),
   ]);
 
-  const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.Amount), 0);
+  const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
 
   return (
     <div className="space-y-6 max-w-5xl">
