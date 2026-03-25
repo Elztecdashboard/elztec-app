@@ -64,20 +64,28 @@ export async function GET() {
     });
     savedOk = !upsertErr;
 
-    // Test de Exact API met de nieuwe token
-    const testResp = await fetch(
+    // Test de Exact API: Me zonder division (correct voor dit endpoint)
+    const meResp = await fetch(
+      `https://start.exactonline.nl/api/v1/current/Me?$select=CurrentDivision,FullName`,
+      { headers: { Authorization: `Bearer ${json.access_token}`, Accept: "application/json" } }
+    );
+    const meData = await meResp.text();
+
+    // Test met division
+    const meResp2 = await fetch(
       `https://start.exactonline.nl/api/v1/${DIVISION}/current/Me?$select=CurrentDivision,FullName`,
       { headers: { Authorization: `Bearer ${json.access_token}`, Accept: "application/json" } }
     );
-    const testData = await testResp.text();
+    const meData2 = await meResp2.text();
 
     return NextResponse.json({
       status: "refreshed",
       refresh_http_status: resp.status,
       new_expires_at: newExpiresAt,
       token_saved: savedOk,
-      api_test_status: testResp.status,
-      api_test_response: testData.substring(0, 300),
+      division_used: DIVISION,
+      me_without_division: { status: meResp.status, body: meData.substring(0, 400) },
+      me_with_division: { status: meResp2.status, body: meData2.substring(0, 400) },
     });
   }
 
