@@ -91,13 +91,15 @@ export async function exactFetch(path: string): Promise<unknown> {
 export async function isExactGekoppeld(): Promise<boolean> {
   try {
     const supabase = createSupabaseServerClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("exact_tokens")
       .select("division")
       .eq("division", DIVISION)
       .single();
+    console.log("[isExactGekoppeld] DIVISION:", DIVISION, "data:", data, "error:", error?.message);
     return !!data;
-  } catch {
+  } catch (e) {
+    console.error("[isExactGekoppeld] exception:", e);
     return false;
   }
 }
