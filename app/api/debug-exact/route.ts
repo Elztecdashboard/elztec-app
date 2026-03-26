@@ -128,6 +128,7 @@ export async function GET() {
     refresh_response: respText.substring(0, 500),
     expires_at: data.expires_at,
     division: data.division,
+    all_rows: allRows,
     env_check: {
       client_id: process.env.EXACT_CLIENT_ID ? "set" : "MISSING",
       client_secret: process.env.EXACT_CLIENT_SECRET ? "set" : "MISSING",
