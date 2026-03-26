@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 const NAV = [
   { href: "/dashboard", label: "Overzicht" },
+  { href: "/dashboard/margeoverzicht", label: "Margeoverzicht" },
   { href: "/dashboard/facturen", label: "Facturen" },
   { href: "/dashboard/opbrengstgroepen", label: "Opbrengstgroepen" },
   { href: "/exact/connect", label: "Exact koppeling" },

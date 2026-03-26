@@ -56,3 +56,20 @@ export interface OpbrengstGroep {
   bedrag: number;
   percentage: number;
 }
+
+export interface MargeGroep {
+  omschrijving: string;
+  omzet: number;
+  kostprijs: number;
+  brutomarge: number;
+}
+
+export interface MaandMargeData {
+  jaar: number;
+  maand: number;
+  groepen: MargeGroep[];
+  overigeKosten: number;
+  totaalOmzet: number;
+  totaalKostprijs: number;
+  totaalBrutomarge: number;
+}
