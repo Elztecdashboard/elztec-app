@@ -1,4 +1,4 @@
-import { exactFetch } from "./exact-client";
+import { exactFetch, exactFetchAll } from "./exact-client";
 import { FinancialSummary, MaandMargeData, MargeGroep, OpbrengstGroep, Receivable } from "@/types";
 
 interface ExactResponse {
@@ -6,15 +6,14 @@ interface ExactResponse {
 }
 
 export async function getFinancialSummary(jaar: number): Promise<FinancialSummary> {
-  const data = await exactFetch(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC,Type&$filter=FinancialYear eq ${jaar}&$top=1000`
-  ) as ExactResponse;
+  const lines = await exactFetchAll(
+    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC&$filter=FinancialYear eq ${jaar}`
+  );
 
-  const lines = data?.d?.results ?? [];
   let omzet = 0;
   let kosten = 0;
 
-  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string }>) {
+  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; }>) {
     const code = Number(line.GLAccountCode);
     const amount = Number(line.AmountDC);
     // NL boekhoudconventie: omzet codes 8xxx, kosten codes 4xxx-7xxx
@@ -34,11 +33,9 @@ export async function getFinancialSummary(jaar: number): Promise<FinancialSummar
 }
 
 export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[]> {
-  const data = await exactFetch(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '8000' and GLAccountCode lt '9000'&$top=1000`
-  ) as ExactResponse;
-
-  const lines = data?.d?.results ?? [];
+  const lines = await exactFetchAll(
+    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '8000' and GLAccountCode lt '9000'`
+  );
   const grouped = new Map<string, { omschrijving: string; bedrag: number }>();
 
   for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; GLAccountDescription: string }>) {
@@ -65,11 +62,9 @@ export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[
 }
 
 export async function getMargeDataPerMaand(jaar: number, maand: number): Promise<MaandMargeData> {
-  const data = await exactFetch(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${maand}&$top=1000`
-  ) as ExactResponse;
-
-  const lines = data?.d?.results ?? [];
+  const lines = await exactFetchAll(
+    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${maand}`
+  );
   const omzetMap = new Map<string, number>();
   const kostprijsMap = new Map<string, number>();
   let overigeKosten = 0;

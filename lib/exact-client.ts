@@ -124,6 +124,31 @@ export async function exactFetch(path: string): Promise<unknown> {
   return resp.json();
 }
 
+// Haalt alle pagina's op door de __next link te volgen.
+// Exact Online geeft standaard max. 60 records per pagina terug;
+// zonder paginering missen we records bij grotere datasets.
+export async function exactFetchAll(path: string): Promise<unknown[]> {
+  const { token, division } = await getValidAccessToken();
+  const results: unknown[] = [];
+
+  let nextUrl: string | null = `${BASE_URL}/${division}/${path}`;
+
+  while (nextUrl) {
+    const resp = await fetch(nextUrl, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      next: { revalidate: 3600 },
+    });
+
+    if (!resp.ok) throw new Error(`Exact API fout: ${resp.status} ${path}`);
+
+    const json = await resp.json() as { d: { results: unknown[]; __next?: string } };
+    results.push(...(json.d?.results ?? []));
+    nextUrl = json.d?.__next ?? null;
+  }
+
+  return results;
+}
+
 export async function isExactGekoppeld(): Promise<boolean> {
   try {
     const supabase = createSupabaseServerClient();
