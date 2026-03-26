@@ -23,10 +23,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  const [financials, facturen] = await Promise.all([
-    getFinancialSummary(jaar).catch(() => null),
-    getOpenstaandeFacturen().catch(() => []),
+  const [financials, facturenResult] = await Promise.allSettled([
+    getFinancialSummary(jaar),
+    getOpenstaandeFacturen(),
   ]);
+
+  if (financials.status === "rejected") {
+    console.error("[dashboard] getFinancialSummary mislukt:", financials.reason);
+  }
+  if (facturenResult.status === "rejected") {
+    console.error("[dashboard] getOpenstaandeFacturen mislukt:", facturenResult.reason);
+  }
+
+  const financialsData = financials.status === "fulfilled" ? financials.value : null;
+  const exactFout = financials.status === "rejected"
+    ? String(financials.reason)
+    : null;
+  const facturen = facturenResult.status === "fulfilled" ? facturenResult.value : [];
 
   const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
 
@@ -47,10 +60,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
+      {exactFout && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          Exact Online data kon niet worden opgehaald.{" "}
+          <Link href="/exact/connect" className="underline font-medium">Koppeling vernieuwen →</Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KpiCard label="Omzet" waarde={financials ? formatEur(financials.omzet) : "—"} sublabel={`YTD ${jaar}`} />
-        <KpiCard label="Kosten" waarde={financials ? formatEur(financials.kosten) : "—"} sublabel={`YTD ${jaar}`} />
-        <KpiCard label="Winst" waarde={financials ? formatEur(financials.winst) : "—"} sublabel={`YTD ${jaar}`} kleur={financials && financials.winst >= 0 ? "groen" : "rood"} />
+        <KpiCard label="Omzet" waarde={financialsData ? formatEur(financialsData.omzet) : "—"} sublabel={`YTD ${jaar}`} />
+        <KpiCard label="Kosten" waarde={financialsData ? formatEur(financialsData.kosten) : "—"} sublabel={`YTD ${jaar}`} />
+        <KpiCard label="Winst" waarde={financialsData ? formatEur(financialsData.winst) : "—"} sublabel={`YTD ${jaar}`} kleur={financialsData && financialsData.winst >= 0 ? "groen" : "rood"} />
         <KpiCard label="Openstaand" waarde={formatEur(totaalOpenstaand)} sublabel={`${facturen.length} facturen`} />
       </div>
     </div>
