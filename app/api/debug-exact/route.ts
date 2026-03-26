@@ -14,8 +14,11 @@ export async function GET() {
     .eq("division", DIVISION)
     .single();
 
+  // Toon alle rijen zodat we kunnen zien of de token onder een ander division is opgeslagen
+  const { data: allRows } = await supabase.from("exact_tokens").select("division, expires_at, updated_at, company_name");
+
   if (error || !data) {
-    return NextResponse.json({ status: "no_token", error: error?.message });
+    return NextResponse.json({ status: "no_token", error: error?.message, all_rows: allRows });
   }
 
   const expiresAt = new Date(data.expires_at).getTime();

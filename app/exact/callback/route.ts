@@ -32,13 +32,9 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenResp.json();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  // Haal divisienummer op
-  const meResp = await fetch(`${BASE_URL}/current/Me?$select=CurrentDivision`, {
-    headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: "application/json" },
-  });
-
-  const meData = await meResp.json();
-  const division = meData?.d?.results?.[0]?.CurrentDivision ?? Number(process.env.EXACT_DIVISION ?? 2377678);
+  // Altijd de geconfigureerde division gebruiken als opslagsleutel.
+  // CurrentDivision uit de API kan afwijken (bijv. ander bedrijf/testomgeving).
+  const division = Number(process.env.EXACT_DIVISION ?? 2377678);
 
   // Sla tokens op
   const supabase = createSupabaseServerClient();
