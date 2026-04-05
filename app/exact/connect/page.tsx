@@ -2,10 +2,11 @@ import { isExactGekoppeld } from "@/lib/exact-client";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import Link from "next/link";
 
+const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL ?? "").trim();
 const AUTH_URL =
   `https://start.exactonline.nl/api/oauth2/auth` +
   `?client_id=${process.env.EXACT_CLIENT_ID}` +
-  `&redirect_uri=${encodeURIComponent(process.env.NEXT_PUBLIC_BASE_URL + "/exact/callback")}` +
+  `&redirect_uri=${encodeURIComponent(baseUrl + "/exact/callback")}` +
   `&response_type=code` +
   `&force_login=0`;
 
