@@ -24,7 +24,8 @@ export async function proxy(req: NextRequest) {
 
   const isProtected =
     req.nextUrl.pathname.startsWith("/dashboard") ||
-    req.nextUrl.pathname.startsWith("/exact");
+    (req.nextUrl.pathname.startsWith("/exact") &&
+      !req.nextUrl.pathname.startsWith("/exact/callback"));
   const isLogin = req.nextUrl.pathname === "/login";
 
   if (isProtected && !user) {
