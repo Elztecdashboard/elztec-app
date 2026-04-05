@@ -228,9 +228,15 @@ export async function getOmzetPerKlant(
   jaar: number,
   maand?: number
 ): Promise<{ naam: string; bedrag: number; percentage: number }[]> {
-  const maandFilter = maand ? ` and FinancialPeriod eq ${maand}` : "";
+  // SalesInvoices ondersteunt geen FinancialYear filter — gebruik datumbereik
+  const vanDatum = maand
+    ? `${jaar}-${String(maand).padStart(2, "0")}-01`
+    : `${jaar}-01-01`;
+  const totDatum = maand
+    ? new Date(jaar, maand, 1).toISOString().slice(0, 10)
+    : `${jaar + 1}-01-01`;
   const invoices = await exactFetchAll(
-    `salesinvoice/SalesInvoices?$select=OrderedByName,AmountDC&$filter=FinancialYear eq ${jaar}${maandFilter}`
+    `salesinvoice/SalesInvoices?$select=OrderedByName,AmountDC&$filter=InvoiceDate ge datetime'${vanDatum}T00:00:00' and InvoiceDate lt datetime'${totDatum}T00:00:00'`
   ) as Array<{ OrderedByName: string; AmountDC: number }>;
 
   const map = new Map<string, number>();
