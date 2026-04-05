@@ -199,11 +199,22 @@ export async function getResultaatYTD(jaar: number, totMaand: number): Promise<M
 }
 
 export async function getOpenstaandeFacturen(): Promise<Receivable[]> {
-  const data = await exactFetch(
-    `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate,Description&$filter=CloseDate eq null&$orderby=DueDate asc`
-  ) as ExactResponse;
-
-  return (data?.d?.results ?? []) as Receivable[];
+  try {
+    const data = await exactFetch(
+      `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate&$filter=CloseDate eq null&$orderby=DueDate asc`
+    ) as ExactResponse;
+    return (data?.d?.results ?? []) as Receivable[];
+  } catch {
+    // Fallback: probeer zonder $orderby (sommige Exact versies accepteren dit niet)
+    try {
+      const data = await exactFetch(
+        `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate&$filter=CloseDate eq null`
+      ) as ExactResponse;
+      return (data?.d?.results ?? []) as Receivable[];
+    } catch {
+      return [];
+    }
+  }
 }
 
 export async function getResultaatAlleMandenVoorJaar(jaar: number): Promise<MaandResultaat[]> {
