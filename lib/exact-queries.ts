@@ -218,9 +218,23 @@ export async function getOpenstaandeFacturen(): Promise<Receivable[]> {
 }
 
 export async function getResultaatAlleMandenVoorJaar(jaar: number): Promise<MaandResultaat[]> {
-  // Parallelle calls per maand — sneller en lichter dan één grote jaarquery
+  // Één API-call voor alle 12 maanden — voorkomt 12× rate-limit hits
+  const lines = await exactFetchAll(
+    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`
+  ) as Array<{ GLAccountCode: string; AmountDC: number; FinancialPeriod: number }>;
+
+  const byPeriod = new Map<number, Array<{ GLAccountCode: string; AmountDC: number }>>();
+  for (const line of lines) {
+    const p = line.FinancialPeriod ?? 0;
+    if (!byPeriod.has(p)) byPeriod.set(p, []);
+    byPeriod.get(p)!.push({ GLAccountCode: line.GLAccountCode, AmountDC: line.AmountDC });
+  }
+
   return Promise.all(
-    Array.from({ length: 12 }, (_, i) => getResultaatPerMaand(jaar, i + 1))
+    Array.from({ length: 12 }, async (_, i) => {
+      const maand = i + 1;
+      return berekenResultaat(byPeriod.get(maand) ?? [], jaar, maand);
+    })
   );
 }
 

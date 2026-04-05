@@ -159,14 +159,38 @@ export async function exactFetch(path: string): Promise<unknown> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Snelle hash voor cache-sleutels
+function hashPath(path: string): string {
+  let h = 0;
+  for (let i = 0; i < path.length; i++) {
+    h = (Math.imul(31, h) + path.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+}
+
 // Haalt alle pagina's op door de __next link te volgen.
-// Exact Online geeft standaard max. 60 records per pagina terug;
-// zonder paginering missen we records bij grotere datasets.
-// Bij 429 (rate limit) wacht 1s en probeert max. 3× opnieuw.
+// Slaat resultaten 5 minuten op in Supabase exact_cache zodat herhaalde
+// page loads de Exact Online rate limit niet raken.
+// Bij 429 wacht hij de Retry-After tijd (max 3s) en probeert max. 3×.
 export async function exactFetchAll(path: string): Promise<unknown[]> {
+  const cacheKey = `efa:${hashPath(path)}`;
+  const supabase = createSupabaseServerClient();
+
+  // Cache check
+  const { data: cached } = await supabase
+    .from("exact_cache")
+    .select("data")
+    .eq("cache_key", cacheKey)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (cached?.data) {
+    return cached.data as unknown[];
+  }
+
+  // Cache miss — haal op bij Exact Online
   const { token, division } = await getValidAccessToken();
   const results: unknown[] = [];
-
   let nextUrl: string | null = `${BASE_URL}/${division}/${path}`;
 
   while (nextUrl) {
@@ -187,6 +211,13 @@ export async function exactFetchAll(path: string): Promise<unknown[]> {
     results.push(...(json.d?.results ?? []));
     nextUrl = json.d?.__next ?? null;
   }
+
+  // Sla op in cache (5 minuten TTL)
+  await supabase.from("exact_cache").upsert({
+    cache_key: cacheKey,
+    data: results,
+    expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+  });
 
   return results;
 }
