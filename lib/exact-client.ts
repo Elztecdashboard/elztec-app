@@ -123,8 +123,13 @@ export async function exactFetch(path: string): Promise<unknown> {
       accessToken = freshRow.access_token;
     } else {
       const newTokens = await fetchNewTokens(freshRow.refresh_token);
-      await saveTokens(newTokens, freshRow.company_name ?? "ElzTec B.V.");
-      accessToken = newTokens.access_token;
+      if (!newTokens) {
+        // Exact Online says token not expired yet — use the existing token
+        accessToken = freshRow.access_token;
+      } else {
+        await saveTokens(newTokens, freshRow.company_name ?? "ElzTec B.V.");
+        accessToken = newTokens.access_token;
+      }
     }
 
     const retry = await fetch(url, {
