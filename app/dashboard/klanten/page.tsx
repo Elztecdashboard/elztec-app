@@ -49,10 +49,10 @@ export default async function KlantenPage({
     const naam = f.AccountName || "Onbekend";
     const existing = facturenPerKlant.get(naam);
     if (existing) {
-      existing.bedrag += Number(f.AmountDC);
+      existing.bedrag += Number(f.TransactionAmountDC);
       if (!existing.oudste || f.InvoiceDate < existing.oudste) existing.oudste = f.InvoiceDate;
     } else {
-      facturenPerKlant.set(naam, { bedrag: Number(f.AmountDC), oudste: f.InvoiceDate });
+      facturenPerKlant.set(naam, { bedrag: Number(f.TransactionAmountDC), oudste: f.InvoiceDate });
     }
   }
   const facturenLijst = Array.from(facturenPerKlant.entries())
@@ -184,7 +184,7 @@ export default async function KlantenPage({
       {facturenLijst.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Openstaande facturen — {formatBedrag(facturen.reduce((s, f) => s + Number(f.AmountDC), 0))} totaal
+            Openstaande facturen — {formatBedrag(facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0))} totaal
           </h2>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <table className="w-full text-sm">

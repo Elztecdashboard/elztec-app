@@ -55,7 +55,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
+  const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
   const omzetVerschil = verschilPct(ytdHuidig.omzet, ytdVorig.omzet);
   const margeHuidig = ytdHuidig.omzet > 0 ? ((ytdHuidig.omzet - ytdHuidig.kostprijs) / ytdHuidig.omzet) * 100 : 0;

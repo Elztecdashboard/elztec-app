@@ -7,7 +7,7 @@ export default function FacturenExport({ facturen }: { facturen: Receivable[] })
     const header = "Klant,Factuurnummer,Factuurdatum,Vervaldatum,Bedrag";
     const rows = facturen.map(
       (f) =>
-        `"${f.AccountName}","${f.InvoiceNumber}","${f.InvoiceDate}","${f.DueDate}","${f.AmountDC}"`
+        `"${f.AccountName}","${f.InvoiceNumber}","${f.InvoiceDate}","${f.DueDate}","${f.TransactionAmountDC}"`
     );
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });

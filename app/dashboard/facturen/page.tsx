@@ -13,16 +13,16 @@ function dagentot(dueDate: string): number {
 
 export default async function FacturenPage() {
   const facturen = await getOpenstaandeFacturen().catch(() => []);
-  const totaal = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
+  const totaal = facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
   // Aging buckets
   const bucket030 = facturen.filter((f) => dagentot(f.DueDate) >= 0 && dagentot(f.DueDate) <= 30);
   const bucket3060 = facturen.filter((f) => dagentot(f.DueDate) > -30 && dagentot(f.DueDate) < 0);
   const bucket60plus = facturen.filter((f) => dagentot(f.DueDate) <= -30);
 
-  const totaal030 = bucket030.reduce((s, f) => s + Number(f.AmountDC), 0);
-  const totaal3060 = bucket3060.reduce((s, f) => s + Number(f.AmountDC), 0);
-  const totaal60plus = bucket60plus.reduce((s, f) => s + Number(f.AmountDC), 0);
+  const totaal030 = bucket030.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
+  const totaal3060 = bucket3060.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
+  const totaal60plus = bucket60plus.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
   return (
     <div className="space-y-6 max-w-5xl">

@@ -44,7 +44,7 @@ function FacturenTabel({ facturen }: { facturen: Receivable[] }) {
                   <td className="px-4 py-2 font-mono text-gray-500">{f.InvoiceNumber}</td>
                   <td className="px-4 py-2 text-center">{f.InvoiceDate ? new Date(f.InvoiceDate).toLocaleDateString("nl-NL") : "—"}</td>
                   <td className="px-4 py-2 text-center">{f.DueDate ? new Date(f.DueDate).toLocaleDateString("nl-NL") : "—"}</td>
-                  <td className="px-4 py-2 text-right font-mono">{formatEur(Number(f.AmountDC))}</td>
+                  <td className="px-4 py-2 text-right font-mono">{formatEur(Number(f.TransactionAmountDC))}</td>
                   <td className="px-4 py-2 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${vervallen ? "bg-red-100 text-red-700" : dagen <= 14 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
                       {vervallen ? `${Math.abs(dagen)} dgn te laat` : `nog ${dagen} dgn`}
@@ -68,8 +68,8 @@ export default function FacturenTabs({ facturen }: { facturen: Receivable[] }) {
   const nietVervallen = facturen.filter((f) => dagentot(f.DueDate) >= 0)
     .sort((a, b) => new Date(a.DueDate).getTime() - new Date(b.DueDate).getTime());
 
-  const totaalVervallen = vervallen.reduce((s, f) => s + Number(f.AmountDC), 0);
-  const totaalNiet = nietVervallen.reduce((s, f) => s + Number(f.AmountDC), 0);
+  const totaalVervallen = vervallen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
+  const totaalNiet = nietVervallen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
   const tabs = [
     { id: "vervallen" as const, label: "Vervallen", count: vervallen.length, totaal: totaalVervallen, kleur: "text-red-600" },

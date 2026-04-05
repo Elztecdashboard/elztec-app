@@ -57,7 +57,7 @@ export default function FacturenTable({ facturen }: { facturen: Receivable[] }) 
                   <td className="px-4 py-2 font-mono text-gray-500">{f.InvoiceNumber}</td>
                   <td className="px-4 py-2 text-center">{f.InvoiceDate ? new Date(f.InvoiceDate).toLocaleDateString("nl-NL") : "—"}</td>
                   <td className="px-4 py-2 text-center">{f.DueDate ? new Date(f.DueDate).toLocaleDateString("nl-NL") : "—"}</td>
-                  <td className="px-4 py-2 text-right font-mono">{formatEur(Number(f.AmountDC))}</td>
+                  <td className="px-4 py-2 text-right font-mono">{formatEur(Number(f.TransactionAmountDC))}</td>
                   <td className="px-4 py-2 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${BADGE[status]}`}>
                       {LABEL[status]}

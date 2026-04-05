@@ -15,11 +15,12 @@ export interface ExactCacheRow {
 
 export interface Receivable {
   AccountName: string;
-  InvoiceNumber: string;
-  AmountDC: number;
+  InvoiceNumber: number;
+  TransactionAmountDC: number;  // werkelijk factuurbedrag (AmountDC = restant na betaling)
   DueDate: string;
   InvoiceDate: string;
   Description: string;
+  IsFullyPaid: boolean;
 }
 
 export interface SalesInvoice {

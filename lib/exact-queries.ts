@@ -199,18 +199,24 @@ export async function getResultaatYTD(jaar: number, totMaand: number): Promise<M
 }
 
 export async function getOpenstaandeFacturen(): Promise<Receivable[]> {
+  // Exact Online cashflow/Receivables geeft { "d": [...] } (array), niet { "d": { "results": [...] } }
+  // AmountDC = restbedrag na betaling (0 als volledig betaald)
+  // TransactionAmountDC = oorspronkelijk factuurbedrag
+  // IsFullyPaid eq false = alleen openstaande facturen
   try {
     const data = await exactFetch(
-      `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate&$filter=CloseDate eq null&$orderby=DueDate asc`
-    ) as ExactResponse;
-    return (data?.d?.results ?? []) as Receivable[];
+      `cashflow/Receivables?$select=AccountName,InvoiceNumber,TransactionAmountDC,DueDate,InvoiceDate,Description,IsFullyPaid&$filter=IsFullyPaid eq false&$orderby=DueDate asc`
+    ) as { d: Receivable[] | { results: Receivable[] } };
+    const items = Array.isArray(data?.d) ? data.d : (data?.d?.results ?? []);
+    return items as Receivable[];
   } catch {
-    // Fallback: probeer zonder $orderby (sommige Exact versies accepteren dit niet)
+    // Fallback: zonder $orderby
     try {
       const data = await exactFetch(
-        `cashflow/Receivables?$select=AccountName,InvoiceNumber,AmountDC,DueDate,InvoiceDate&$filter=CloseDate eq null`
-      ) as ExactResponse;
-      return (data?.d?.results ?? []) as Receivable[];
+        `cashflow/Receivables?$select=AccountName,InvoiceNumber,TransactionAmountDC,DueDate,InvoiceDate,Description,IsFullyPaid&$filter=IsFullyPaid eq false`
+      ) as { d: Receivable[] | { results: Receivable[] } };
+      const items = Array.isArray(data?.d) ? data.d : (data?.d?.results ?? []);
+      return items as Receivable[];
     } catch {
       return [];
     }
