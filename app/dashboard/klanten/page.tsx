@@ -16,10 +16,23 @@ export default async function KlantenPage({
   const huidigJaar = new Date().getFullYear();
   const geselecteerdJaar = Number(params.jaar) || huidigJaar;
 
-  const [vergelijking, facturen] = await Promise.all([
-    getKlantenVergelijking(geselecteerdJaar, geselecteerdJaar - 1),
-    getOpenstaandeFacturen(),
-  ]);
+  let vergelijking, facturen;
+  try {
+    [vergelijking, facturen] = await Promise.all([
+      getKlantenVergelijking(geselecteerdJaar, geselecteerdJaar - 1),
+      getOpenstaandeFacturen(),
+    ]);
+  } catch (err) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+        <p className="text-red-600 font-semibold">Fout bij laden van klantanalyse</p>
+        <p className="text-gray-500 text-sm max-w-md">{String(err)}</p>
+        <a href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
+          Exact Online opnieuw koppelen →
+        </a>
+      </div>
+    );
+  }
 
   // Build top klanten vergelijking
   const vorigMap = new Map(vergelijking.vorig.map((k) => [k.naam, k.bedrag]));

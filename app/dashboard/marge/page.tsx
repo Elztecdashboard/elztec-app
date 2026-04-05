@@ -22,10 +22,24 @@ export default async function MargePage({
   const geselecteerdJaar = Number(params.jaar) || huidigJaar;
   const geselecteerdMaand = Number(params.maand) || huidigMaand;
 
-  const [margeData, alleMaanden] = await Promise.all([
-    getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
-    getResultaatAlleMandenVoorJaar(geselecteerdJaar),
-  ]);
+  let margeData = null;
+  let alleMaanden;
+  try {
+    [margeData, alleMaanden] = await Promise.all([
+      getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
+      getResultaatAlleMandenVoorJaar(geselecteerdJaar),
+    ]);
+  } catch (err) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+        <p className="text-red-600 font-semibold">Fout bij laden van margeanalyse</p>
+        <p className="text-gray-500 text-sm max-w-md">{String(err)}</p>
+        <a href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
+          Exact Online opnieuw koppelen →
+        </a>
+      </div>
+    );
+  }
 
   const margePct = margeData && margeData.totaalOmzet > 0
     ? (margeData.totaalBrutomarge / margeData.totaalOmzet) * 100
