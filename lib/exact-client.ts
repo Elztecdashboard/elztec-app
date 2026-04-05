@@ -139,6 +139,17 @@ export async function exactFetch(path: string): Promise<unknown> {
     return retry.json();
   }
 
+  if (resp.status === 429) {
+    const retryAfter = Number(resp.headers.get("Retry-After") ?? 1);
+    await sleep(Math.min(retryAfter, 3) * 1000);
+    const retry = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      next: { revalidate: 300 },
+    });
+    if (!retry.ok) throw new Error(`Exact API fout: ${retry.status} ${path}`);
+    return retry.json();
+  }
+
   if (!resp.ok) {
     throw new Error(`Exact API fout: ${resp.status} ${path}`);
   }
@@ -146,9 +157,12 @@ export async function exactFetch(path: string): Promise<unknown> {
   return resp.json();
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // Haalt alle pagina's op door de __next link te volgen.
 // Exact Online geeft standaard max. 60 records per pagina terug;
 // zonder paginering missen we records bij grotere datasets.
+// Bij 429 (rate limit) wacht 1s en probeert max. 3× opnieuw.
 export async function exactFetchAll(path: string): Promise<unknown[]> {
   const { token, division } = await getValidAccessToken();
   const results: unknown[] = [];
@@ -156,14 +170,20 @@ export async function exactFetchAll(path: string): Promise<unknown[]> {
   let nextUrl: string | null = `${BASE_URL}/${division}/${path}`;
 
   while (nextUrl) {
-    const resp = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      next: { revalidate: 300 },
-    });
+    let resp: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      resp = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        next: { revalidate: 300 },
+      });
+      if (resp.status !== 429) break;
+      const retryAfter = Number(resp.headers.get("Retry-After") ?? 1);
+      await sleep(Math.min(retryAfter, 3) * 1000);
+    }
 
-    if (!resp.ok) throw new Error(`Exact API fout: ${resp.status} ${path}`);
+    if (!resp!.ok) throw new Error(`Exact API fout: ${resp!.status} ${path}`);
 
-    const json = await resp.json() as { d: { results: unknown[]; __next?: string } };
+    const json = await resp!.json() as { d: { results: unknown[]; __next?: string } };
     results.push(...(json.d?.results ?? []));
     nextUrl = json.d?.__next ?? null;
   }

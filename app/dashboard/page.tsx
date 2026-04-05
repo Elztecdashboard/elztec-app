@@ -37,13 +37,12 @@ export default async function DashboardPage() {
 
   let ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen;
   try {
-    [ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen] = await Promise.all([
-      getResultaatYTD(jaar, maand),
-      getResultaatYTD(jaar - 1, maand),
-      getResultaatAlleMandenVoorJaar(jaar),
-      getResultaatAlleMandenVoorJaar(jaar - 1),
-      getOpenstaandeFacturen(),
-    ]);
+    // Sequentieel ipv Promise.all om Exact Online rate limits (429) te voorkomen
+    ytdHuidig = await getResultaatYTD(jaar, maand);
+    ytdVorig = await getResultaatYTD(jaar - 1, maand);
+    alleMandenHuidig = await getResultaatAlleMandenVoorJaar(jaar);
+    alleMandenVorig = await getResultaatAlleMandenVoorJaar(jaar - 1);
+    facturen = await getOpenstaandeFacturen();
   } catch (err) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
