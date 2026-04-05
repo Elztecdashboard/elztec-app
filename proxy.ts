@@ -20,18 +20,18 @@ export async function proxy(req: NextRequest) {
     }
   );
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const isProtected =
     req.nextUrl.pathname.startsWith("/dashboard") ||
     req.nextUrl.pathname.startsWith("/exact");
   const isLogin = req.nextUrl.pathname === "/login";
 
-  if (isProtected && !session) {
+  if (isProtected && !user) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  if (isLogin && session) {
+  if (isLogin && user) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 

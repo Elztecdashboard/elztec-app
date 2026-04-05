@@ -4,7 +4,8 @@ import { refreshExactTokenProactive } from "@/lib/exact-client";
 // Vercel stuurt automatisch "Authorization: Bearer {CRON_SECRET}" mee bij cron-aanroepen
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

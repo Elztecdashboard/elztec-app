@@ -74,11 +74,11 @@ const getValidAccessToken = cache(async (): Promise<{ token: string; division: n
   const row = data as ExactTokenRow;
   const expiresAt = new Date(row.expires_at).getTime();
 
-  if (expiresAt > Date.now() + 60_000) {
+  if (expiresAt > Date.now() + 300_000) {
     return { token: row.access_token, division: row.division };
   }
 
-  // Token verloopt binnen 60 seconden of is al verlopen → refresh
+  // Token verloopt binnen 5 minuten of is al verlopen → refresh
   const newTokens = await fetchNewTokens(row.refresh_token);
   await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
   return { token: newTokens.access_token, division: DIVISION };
@@ -93,25 +93,34 @@ export async function exactFetch(path: string): Promise<unknown> {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
-    next: { revalidate: 3600 },
+    next: { revalidate: 300 },
   });
 
   if (resp.status === 401) {
-    // Exact heeft het token geweigerd — forceer een verse refresh en probeer opnieuw
-    const supabase = createSupabaseServerClient();
-    const { data } = await supabase
+    // Re-read token from Supabase — a concurrent request may have already refreshed it
+    const supabase2 = createSupabaseServerClient();
+    const { data: freshData } = await supabase2
       .from("exact_tokens")
       .select("*")
       .eq("division", DIVISION)
       .single();
-    if (!data) throw new Error("Geen token voor force-refresh");
+    if (!freshData) throw new Error("Geen token voor force-refresh");
 
-    const row = data as ExactTokenRow;
-    const newTokens = await fetchNewTokens(row.refresh_token);
-    await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
+    const freshRow = freshData as ExactTokenRow;
+    const recentlyRefreshed = Date.now() - new Date(freshRow.updated_at).getTime() < 30_000;
+
+    let accessToken: string;
+    if (recentlyRefreshed) {
+      // Another request already refreshed — use the new token directly
+      accessToken = freshRow.access_token;
+    } else {
+      const newTokens = await fetchNewTokens(freshRow.refresh_token);
+      await saveTokens(newTokens, freshRow.company_name ?? "ElzTec B.V.");
+      accessToken = newTokens.access_token;
+    }
 
     const retry = await fetch(url, {
-      headers: { Authorization: `Bearer ${newTokens.access_token}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     });
     if (!retry.ok) throw new Error(`Exact API fout na retry: ${retry.status} ${path}`);
     return retry.json();
@@ -136,7 +145,7 @@ export async function exactFetchAll(path: string): Promise<unknown[]> {
   while (nextUrl) {
     const resp = await fetch(nextUrl, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      next: { revalidate: 3600 },
+      next: { revalidate: 300 },
     });
 
     if (!resp.ok) throw new Error(`Exact API fout: ${resp.status} ${path}`);
