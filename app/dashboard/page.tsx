@@ -35,13 +35,26 @@ export default async function DashboardPage() {
     );
   }
 
-  const [ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen] = await Promise.all([
-    getResultaatYTD(jaar, maand),
-    getResultaatYTD(jaar - 1, maand),
-    getResultaatAlleMandenVoorJaar(jaar),
-    getResultaatAlleMandenVoorJaar(jaar - 1),
-    getOpenstaandeFacturen(),
-  ]);
+  let ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen;
+  try {
+    [ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen] = await Promise.all([
+      getResultaatYTD(jaar, maand),
+      getResultaatYTD(jaar - 1, maand),
+      getResultaatAlleMandenVoorJaar(jaar),
+      getResultaatAlleMandenVoorJaar(jaar - 1),
+      getOpenstaandeFacturen(),
+    ]);
+  } catch (err) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+        <p className="text-red-600 font-semibold">Fout bij laden van Exact Online data</p>
+        <p className="text-gray-500 text-sm max-w-md">{String(err)}</p>
+        <Link href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
+          Exact Online opnieuw koppelen →
+        </Link>
+      </div>
+    );
+  }
 
   const totaalOpenstaand = facturen.reduce((s, f) => s + Number(f.AmountDC), 0);
 
