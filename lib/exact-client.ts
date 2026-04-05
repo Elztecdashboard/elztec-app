@@ -28,6 +28,10 @@ async function fetchNewTokens(refreshToken: string): Promise<{
   if (!resp.ok) {
     const errText = await resp.text();
     console.error("[fetchNewTokens] Refresh mislukt:", resp.status, errText);
+    // Exact Online weigert refresh als het token nog niet verlopen is → gooi null terug
+    if (errText.includes("access_token not expired")) {
+      return null as unknown as { access_token: string; refresh_token: string; expires_at: string };
+    }
     throw new Error("Token vernieuwen mislukt. Koppel Exact Online opnieuw via /exact/connect.");
   }
 
@@ -74,12 +78,16 @@ const getValidAccessToken = cache(async (): Promise<{ token: string; division: n
   const row = data as ExactTokenRow;
   const expiresAt = new Date(row.expires_at).getTime();
 
-  if (expiresAt > Date.now() + 300_000) {
+  if (expiresAt > Date.now() + 60_000) {
     return { token: row.access_token, division: row.division };
   }
 
-  // Token verloopt binnen 5 minuten of is al verlopen → refresh
+  // Token verloopt binnen 60 seconden of is al verlopen → probeer refresh
   const newTokens = await fetchNewTokens(row.refresh_token);
+  // Als Exact Online zegt dat het token nog niet verlopen is, gebruik het gewoon
+  if (!newTokens) {
+    return { token: row.access_token, division: row.division };
+  }
   await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
   return { token: newTokens.access_token, division: DIVISION };
 });
