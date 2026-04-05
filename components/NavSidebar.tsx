@@ -6,10 +6,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 const NAV = [
   { href: "/dashboard", label: "Overzicht" },
-  { href: "/dashboard/margeoverzicht", label: "Margeoverzicht" },
+  { href: "/dashboard/maandcijfers", label: "Maandcijfers" },
+  { href: "/dashboard/jaarcijfers", label: "Jaarcijfers" },
+  { href: "/dashboard/omzet", label: "Omzet" },
+  { href: "/dashboard/kosten", label: "Kosten" },
+  { href: "/dashboard/marge", label: "Marge" },
+  { href: "/dashboard/klanten", label: "Klanten" },
   { href: "/dashboard/facturen", label: "Facturen" },
-  { href: "/dashboard/opbrengstgroepen", label: "Opbrengstgroepen" },
-  { href: "/exact/connect", label: "Exact koppeling" },
 ];
 
 export default function NavSidebar({ email }: { email: string }) {
@@ -23,7 +26,7 @@ export default function NavSidebar({ email }: { email: string }) {
   }
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-[#1F4E79] text-white flex flex-col">
+    <aside className="w-56 flex-shrink-0 bg-[#001D3A] text-white flex flex-col">
       <div className="px-5 py-6 border-b border-white/10">
         <p className="font-bold text-lg">Elztec</p>
         <p className="text-xs text-white/60 mt-0.5">Dashboard</p>
@@ -36,7 +39,7 @@ export default function NavSidebar({ email }: { email: string }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`block px-3 py-2 rounded-lg text-sm transition ${actief ? "bg-white/20 font-semibold" : "hover:bg-white/10"}`}
+              className={`block px-3 py-2 rounded-lg text-sm transition ${actief ? "bg-[#6979D6] font-semibold" : "hover:bg-white/10"}`}
             >
               {item.label}
             </Link>

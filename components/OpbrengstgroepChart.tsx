@@ -22,11 +22,11 @@ export default function OpbrengstgroepChart({ groepen }: { groepen: OpbrengstGro
         <div key={g.code} className="space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-gray-700 truncate max-w-[60%]">{g.omschrijving}</span>
-            <span className="font-mono font-medium text-[#1F4E79]">{formatEur(g.bedrag)}</span>
+            <span className="font-mono font-medium text-[#001D3A]">{formatEur(g.bedrag)}</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#2E75B6] rounded-full"
+              className="h-full bg-[#6979D6] rounded-full"
               style={{ width: `${Math.min(g.percentage, 100)}%` }}
             />
           </div>

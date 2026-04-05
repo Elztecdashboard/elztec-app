@@ -31,7 +31,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-[#1F4E79]">Elztec Dashboard</h1>
+          <h1 className="text-2xl font-bold text-[#001D3A]">Elztec Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">Inloggen met je account</p>
         </div>
 
@@ -43,7 +43,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E75B6]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6979D6]"
             />
           </div>
           <div>
@@ -53,7 +53,7 @@ export default function LoginPage() {
               value={wachtwoord}
               onChange={(e) => setWachtwoord(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E75B6]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6979D6]"
             />
           </div>
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={bezig}
-            className="w-full bg-[#1F4E79] text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-[#2E75B6] transition disabled:opacity-60"
+            className="w-full bg-[#001D3A] text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-[#6979D6] transition disabled:opacity-60"
           >
             {bezig ? "Bezig..." : "Inloggen"}
           </button>

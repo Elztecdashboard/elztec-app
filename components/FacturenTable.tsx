@@ -39,7 +39,7 @@ export default function FacturenTable({ facturen }: { facturen: Receivable[] }) 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-[#2E75B6] text-white">
+            <tr className="bg-[#001D3A] text-white">
               <th className="px-4 py-2 text-left font-medium">Debiteur</th>
               <th className="px-4 py-2 text-left font-medium">Factuurnr.</th>
               <th className="px-4 py-2 text-center font-medium">Factuurdatum</th>
@@ -52,7 +52,7 @@ export default function FacturenTable({ facturen }: { facturen: Receivable[] }) 
             {facturen.map((f, i) => {
               const status = datumStatus(f.DueDate);
               return (
-                <tr key={i} className={i % 2 === 0 ? "bg-[#EBF3FB]" : ""}>
+                <tr key={i} className={i % 2 === 0 ? "bg-[#eef0fb]" : ""}>
                   <td className="px-4 py-2 font-medium">{f.AccountName}</td>
                   <td className="px-4 py-2 font-mono text-gray-500">{f.InvoiceNumber}</td>
                   <td className="px-4 py-2 text-center">{f.InvoiceDate ? new Date(f.InvoiceDate).toLocaleDateString("nl-NL") : "—"}</td>

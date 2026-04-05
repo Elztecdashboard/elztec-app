@@ -25,7 +25,7 @@ export default async function ExactConnectPage() {
 
   return (
     <div className="max-w-lg space-y-6">
-      <h1 className="text-2xl font-bold text-[#1F4E79]">Exact Online koppeling</h1>
+      <h1 className="text-2xl font-bold text-[#001D3A]">Exact Online koppeling</h1>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export default async function ExactConnectPage() {
         ) : (
           <Link
             href={AUTH_URL}
-            className="inline-block bg-[#1F4E79] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#2E75B6] transition"
+            className="inline-block bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition"
           >
             Koppel Exact Online →
           </Link>

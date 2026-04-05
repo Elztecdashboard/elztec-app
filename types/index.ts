@@ -64,10 +64,20 @@ export interface MargeGroep {
   brutomarge: number;
 }
 
+export interface MaandResultaat {
+  jaar: number;
+  maand: number;
+  omzet: number;
+  kostprijs: number;
+  overigeKosten: number;
+  nettoResultaat: number;
+}
+
 export interface MaandMargeData {
   jaar: number;
   maand: number;
   groepen: MargeGroep[];
+  margeGroepen: MargeGroep[];
   overigeKosten: number;
   totaalOmzet: number;
   totaalKostprijs: number;
