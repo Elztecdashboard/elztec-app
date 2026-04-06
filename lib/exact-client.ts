@@ -126,11 +126,15 @@ async function readCache<T>(cacheKey: string): Promise<T[] | null> {
 
 async function writeCache(cacheKey: string, data: unknown[]): Promise<void> {
   const supabase = createSupabaseServerClient();
-  await supabase.from("exact_cache").upsert({
-    cache_key: cacheKey,
-    data,
-    expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
-  });
+  const { error } = await supabase.from("exact_cache").upsert(
+    {
+      cache_key: cacheKey,
+      data,
+      expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
+    },
+    { onConflict: "cache_key" }
+  );
+  if (error) console.error("[writeCache] Supabase upsert fout:", cacheKey, error.message);
 }
 
 // ─── Interne paginator (geen cache, geen side effects) ────────────────────────

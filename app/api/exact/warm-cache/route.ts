@@ -5,6 +5,10 @@ import {
   warmReceivables,
 } from "@/lib/exact-client";
 
+// Vercel Hobby: max 60s per serverless function.
+// tx-current/prev halen 12 periodes op (~5-8s) — verhoog limiet voor zekerheid.
+export const maxDuration = 60;
+
 /**
  * Cache warm-up endpoint — wordt aangeroepen door Make.com elke 10 minuten.
  * Vult de Supabase cache proactief, zodat gebruikers nooit wachten op
