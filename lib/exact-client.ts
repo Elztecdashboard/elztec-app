@@ -192,26 +192,16 @@ export const getReceivablesData = cache(async (): Promise<unknown[]> => {
 
 export async function warmTransactionLines(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  // Exact Online retourneert geen __next als resultaten exact gelijk zijn aan $top=1000.
-  // Fix: gebruik expliciete $skip-paginatie en stop zodra batch < 1000 records.
-  // Zo zijn 2-3 API calls genoeg (vs. 12 per-periode calls die rate limits veroorzaken).
+  // Exact Online ondersteunt geen $skip op TransactionLines en retourneert geen __next
+  // als resultaten exact gelijk zijn aan $top=1000. Fix: haal per FinancialPeriod (1-12) op.
+  // Elke periode heeft max ~300 records → nooit truncatie, ~2 API calls per periode.
+  // Make.com roept tx-current en tx-prev als aparte modules aan (met tussentijd),
+  // dus er is geen rate limiting risico in productie.
   const allLines: unknown[] = [];
-  let skip = 0;
-  while (true) {
-    const url = `${BASE_URL}/${division}/financialtransaction/TransactionLines?$top=1000&$skip=${skip}&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
-    let resp: Response | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      resp = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
-      if (resp.status !== 429) break;
-      const retryAfter = Number(resp.headers.get("Retry-After") ?? 2);
-      await sleep(Math.min(retryAfter, 5) * 1000);
-    }
-    if (!resp!.ok) throw new Error(`Exact API fout: ${resp!.status} TransactionLines jaar=${jaar} skip=${skip}`);
-    const json = await resp!.json() as { d: { results: unknown[] } };
-    const batch = json.d?.results ?? [];
-    allLines.push(...batch);
-    if (batch.length < 1000) break; // Minder dan volledige pagina → klaar
-    skip += 1000;
+  for (let periode = 1; periode <= 12; periode++) {
+    const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
+    const lines = await fetchAllPages(path, token, division);
+    allLines.push(...lines);
   }
   await writeCache(`tx-${jaar}`, allLines);
   return allLines.length;
@@ -219,27 +209,13 @@ export async function warmTransactionLines(jaar: number): Promise<number> {
 
 export async function warmSalesInvoices(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  // Zelfde $skip-paginatie als warmTransactionLines om truncatie bij >1000 facturen te vermijden.
-  const allInvoices: unknown[] = [];
-  let skip = 0;
-  while (true) {
-    const url = `${BASE_URL}/${division}/salesinvoice/SalesInvoices?$top=1000&$skip=${skip}&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
-    let resp: Response | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      resp = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
-      if (resp.status !== 429) break;
-      const retryAfter = Number(resp.headers.get("Retry-After") ?? 2);
-      await sleep(Math.min(retryAfter, 5) * 1000);
-    }
-    if (!resp!.ok) throw new Error(`Exact API fout: ${resp!.status} SalesInvoices jaar=${jaar} skip=${skip}`);
-    const json = await resp!.json() as { d: { results: unknown[] } };
-    const batch = json.d?.results ?? [];
-    allInvoices.push(...convertODataDates(batch) as unknown[]);
-    if (batch.length < 1000) break;
-    skip += 1000;
-  }
-  await writeCache(`si-${jaar}`, allInvoices);
-  return allInvoices.length;
+  // SalesInvoices heeft <100 records/jaar — één jaarquery is voldoende.
+  // fetchAllPages volgt __next als er onverwacht meer dan 1000 zijn.
+  const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
+  const raw = await fetchAllPages(path, token, division);
+  const invoices = convertODataDates(raw) as unknown[];
+  await writeCache(`si-${jaar}`, invoices);
+  return invoices.length;
 }
 
 export async function warmReceivables(): Promise<number> {
