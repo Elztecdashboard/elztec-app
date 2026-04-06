@@ -203,7 +203,8 @@ export async function warmTransactionLines(jaar: number): Promise<number> {
 export async function warmSalesInvoices(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
   const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
-  const invoices = await fetchAllPages(path, token, division);
+  const raw = await fetchAllPages(path, token, division);
+  const invoices = convertODataDates(raw) as unknown[];
   await writeCache(`si-${jaar}`, invoices);
   return invoices.length;
 }
@@ -216,9 +217,27 @@ export async function warmReceivables(): Promise<number> {
   });
   if (!resp.ok) throw new Error(`Exact API fout: ${resp.status} cashflow/Receivables`);
   const data = await resp.json() as { d: unknown[] | { results: unknown[] } };
-  const items = Array.isArray(data?.d) ? data.d : ((data?.d as { results: unknown[] })?.results ?? []);
-  await writeCache("recv", items as unknown[]);
-  return (items as unknown[]).length;
+  const rawItems = Array.isArray(data?.d) ? data.d : ((data?.d as { results: unknown[] })?.results ?? []);
+  const items = convertODataDates(rawItems) as unknown[];
+  await writeCache("recv", items);
+  return items.length;
+}
+
+// ─── OData datum-converter ────────────────────────────────────────────────────
+// Exact Online retourneert datums als "/Date(1700870400000)/" (OData v3 formaat).
+// Converteer ze naar ISO-strings zodat new Date(...) overal correct werkt.
+function convertODataDates(obj: unknown): unknown {
+  if (typeof obj === "string") {
+    const m = obj.match(/^\/Date\((\d+)\)\/$/);
+    return m ? new Date(Number(m[1])).toISOString() : obj;
+  }
+  if (Array.isArray(obj)) return obj.map(convertODataDates);
+  if (obj && typeof obj === "object") {
+    return Object.fromEntries(
+      Object.entries(obj as Record<string, unknown>).map(([k, v]) => [k, convertODataDates(v)])
+    );
+  }
+  return obj;
 }
 
 // ─── Low-level helpers (voor backwards compat en /exact/callback) ──────────────

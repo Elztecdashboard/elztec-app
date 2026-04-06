@@ -11,7 +11,10 @@ function formatEur(bedrag: number) {
 }
 
 function dagentot(dueDate: string): number {
-  return (new Date(dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  // Verwerk zowel ISO-strings als OData /Date(ms)/ formaat
+  const m = dueDate?.match(/\/Date\((\d+)\)\//);
+  const ts = m ? Number(m[1]) : new Date(dueDate).getTime();
+  return (ts - Date.now()) / (1000 * 60 * 60 * 24);
 }
 
 export default async function FacturenPage() {
