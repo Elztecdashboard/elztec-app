@@ -47,8 +47,5 @@ export async function GET(req: NextRequest) {
     updated_at: new Date().toISOString(),
   });
 
-  // Wis de Supabase cache zodat gebruikers na een nieuwe koppeling verse data zien
-  await supabase.from("exact_cache").delete().neq("cache_key", "");
-
   return NextResponse.redirect(new URL("/dashboard", req.url));
 }
