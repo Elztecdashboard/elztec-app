@@ -1,33 +1,68 @@
-import { exactFetch, exactFetchAll } from "./exact-client";
-import { FinancialSummary, MaandMargeData, MaandResultaat, MargeGroep, OpbrengstGroep, Receivable } from "@/types";
+import {
+  getTransactionLinesForJaar,
+  getSalesInvoicesForJaar,
+  getReceivablesData,
+  TransactionLine,
+} from "./exact-client";
+import {
+  FinancialSummary,
+  MaandMargeData,
+  MaandResultaat,
+  MargeGroep,
+  OpbrengstGroep,
+  Receivable,
+} from "@/types";
 
-interface ExactResponse {
-  d: { results: unknown[] };
+// ─── TransactionLine helpers ──────────────────────────────────────────────────
+// Alle financiële berekeningen werken op de gecachede TransactionLine dataset.
+// Er wordt slechts één Exact Online call per jaar gemaakt (door Make.com vooraf).
+
+export async function berekenResultaat(
+  lines: Array<{ AmountDC: number; GLAccountCode: string }>,
+  jaar: number,
+  maand: number
+): Promise<MaandResultaat> {
+  let omzetSom = 0;
+  let kostprijsSom = 0;
+  let overigeKostenSom = 0;
+
+  for (const line of lines) {
+    const code = Number(line.GLAccountCode);
+    const amount = Number(line.AmountDC);
+    if (code >= 8000 && code < 9000) omzetSom += amount;
+    else if (code >= 7000 && code < 8000) kostprijsSom += amount;
+    else if (code >= 4000 && code < 7000) overigeKostenSom += amount;
+  }
+
+  const omzet = Math.round(Math.abs(omzetSom) * 100) / 100;
+  const kostprijs = Math.round(Math.abs(kostprijsSom) * 100) / 100;
+  const overigeKosten = Math.round(Math.abs(overigeKostenSom) * 100) / 100;
+  return {
+    jaar,
+    maand,
+    omzet,
+    kostprijs,
+    overigeKosten,
+    nettoResultaat: Math.round((omzet - kostprijs - overigeKosten) * 100) / 100,
+  };
 }
 
+// ─── Financieel overzicht ──────────────────────────────────────────────────────
 export async function getFinancialSummary(jaar: number): Promise<FinancialSummary> {
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC&$filter=FinancialYear eq ${jaar}`
-  );
+  const lines = await getTransactionLinesForJaar(jaar);
 
   let omzetSom = 0;
   let kostenSom = 0;
 
-  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; }>) {
+  for (const line of lines) {
     const code = Number(line.GLAccountCode);
     const amount = Number(line.AmountDC);
-    // Gebruik gesigneerde som (geen Math.abs per regel), zodat correctieboekingen
-    // het saldo verlagen in plaats van verhogen — net zoals Exact de W&V toont.
-    if (code >= 8000 && code < 9000) {
-      omzetSom += amount;
-    } else if (code >= 4000 && code < 8000) {
-      kostenSom += amount;
-    }
+    if (code >= 8000 && code < 9000) omzetSom += amount;
+    else if (code >= 4000 && code < 8000) kostenSom += amount;
   }
 
   const omzet = Math.abs(omzetSom);
   const kosten = Math.abs(kostenSom);
-
   return {
     omzet: Math.round(omzet * 100) / 100,
     kosten: Math.round(kosten * 100) / 100,
@@ -36,25 +71,58 @@ export async function getFinancialSummary(jaar: number): Promise<FinancialSummar
   };
 }
 
-export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[]> {
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '8000' and GLAccountCode lt '9000'`
+// ─── Resultaat per maand (gefilterd client-side uit gecachede dataset) ─────────
+export async function getResultaatPerMaand(jaar: number, maand: number): Promise<MaandResultaat> {
+  const lines = await getTransactionLinesForJaar(jaar);
+  const maandLines = lines.filter((l) => l.FinancialPeriod === maand);
+  return berekenResultaat(maandLines, jaar, maand);
+}
+
+export async function getResultaatYTD(jaar: number, totMaand: number): Promise<MaandResultaat> {
+  const lines = await getTransactionLinesForJaar(jaar);
+  const ytdLines = lines.filter((l) => l.FinancialPeriod >= 1 && l.FinancialPeriod <= totMaand);
+  return berekenResultaat(ytdLines, jaar, totMaand);
+}
+
+export async function getResultaatAlleMandenVoorJaar(jaar: number): Promise<MaandResultaat[]> {
+  const lines = await getTransactionLinesForJaar(jaar);
+
+  const byPeriod = new Map<number, TransactionLine[]>();
+  for (const line of lines) {
+    const p = line.FinancialPeriod ?? 0;
+    if (!byPeriod.has(p)) byPeriod.set(p, []);
+    byPeriod.get(p)!.push(line);
+  }
+
+  return Promise.all(
+    Array.from({ length: 12 }, async (_, i) => {
+      const maand = i + 1;
+      return berekenResultaat(byPeriod.get(maand) ?? [], jaar, maand);
+    })
   );
+}
+
+// ─── Omzetgroepen ─────────────────────────────────────────────────────────────
+export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[]> {
+  const lines = await getTransactionLinesForJaar(jaar);
   const grouped = new Map<string, { omschrijving: string; bedrag: number }>();
 
-  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; GLAccountDescription: string }>) {
-    const code = line.GLAccountCode;
-    const existing = grouped.get(code);
-    const amount = Number(line.AmountDC); // gesigneerd — abs pas aan het einde
+  for (const line of lines) {
+    const code = Number(line.GLAccountCode);
+    if (code < 8000 || code >= 9000) continue;
+    const existing = grouped.get(line.GLAccountCode);
+    const amount = Number(line.AmountDC);
     if (existing) {
       existing.bedrag += amount;
     } else {
-      grouped.set(code, { omschrijving: line.GLAccountDescription || code, bedrag: amount });
+      grouped.set(line.GLAccountCode, {
+        omschrijving: line.GLAccountDescription || line.GLAccountCode,
+        bedrag: amount,
+      });
     }
   }
 
   const totaal = Array.from(grouped.values()).reduce((s, g) => s + Math.abs(g.bedrag), 0);
-
   return Array.from(grouped.entries())
     .map(([code, g]) => ({
       code,
@@ -65,18 +133,19 @@ export async function getOpbrengstGroepen(jaar: number): Promise<OpbrengstGroep[
     .sort((a, b) => b.bedrag - a.bedrag);
 }
 
+// ─── Margedata per maand ───────────────────────────────────────────────────────
 export async function getMargeDataPerMaand(jaar: number, maand: number): Promise<MaandMargeData> {
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${maand}`
-  );
+  const lines = await getTransactionLinesForJaar(jaar);
+  const maandLines = lines.filter((l) => l.FinancialPeriod === maand);
+
   const omzetMap = new Map<string, number>();
   const kostprijsMap = new Map<string, number>();
   let overigeKostenSom = 0;
 
-  for (const line of lines as Array<{ AmountDC: number; GLAccountCode: string; GLAccountDescription: string }>) {
+  for (const line of maandLines) {
     const code = Number(line.GLAccountCode);
     const naam = line.GLAccountDescription || line.GLAccountCode;
-    const amount = Number(line.AmountDC); // gesigneerd
+    const amount = Number(line.AmountDC);
 
     if (code >= 8000 && code < 9000) {
       omzetMap.set(naam, (omzetMap.get(naam) ?? 0) + amount);
@@ -88,8 +157,6 @@ export async function getMargeDataPerMaand(jaar: number, maand: number): Promise
   }
 
   const overigeKosten = Math.abs(overigeKostenSom);
-
-  // groepen: used for omzet & kostprijs display sections (unmatched rows kept separate)
   const alleNamen = new Set([...omzetMap.keys(), ...kostprijsMap.keys()]);
   const groepen: MargeGroep[] = Array.from(alleNamen)
     .map((naam) => {
@@ -104,15 +171,12 @@ export async function getMargeDataPerMaand(jaar: number, maand: number): Promise
     })
     .sort((a, b) => b.omzet - a.omzet);
 
-  // margeGroepen: one row per omzet account, kostprijs matched by keyword
-  // Strip "Omzet " prefix from omzet description to get the group keyword (e.g. "VIAG", "BEI")
   const omzetEntries = Array.from(omzetMap.entries()).map(([naam, som]) => ({
     naam,
     keyword: naam.replace(/^omzet\s+/i, "").trim(),
     omzet: Math.abs(som),
   }));
 
-  // For each 7xxx kostprijs account, find the omzet group whose keyword appears in it
   const kostprijsPerGroep = new Map<string, number>();
   let ongekoppeldeKostprijs = 0;
   for (const [kNaam, kSom] of kostprijsMap.entries()) {
@@ -141,7 +205,6 @@ export async function getMargeDataPerMaand(jaar: number, maand: number): Promise
     })
     .sort((a, b) => b.omzet - a.omzet);
 
-  // Append "Overige" row for kostprijs accounts that could not be matched to an omzet group
   if (ongekoppeldeKostprijs > 0) {
     const kp = Math.round(ongekoppeldeKostprijs * 100) / 100;
     margeGroepen.push({
@@ -167,100 +230,59 @@ export async function getMargeDataPerMaand(jaar: number, maand: number): Promise
   };
 }
 
-export async function berekenResultaat(lines: Array<{ AmountDC: number; GLAccountCode: string }>, jaar: number, maand: number): Promise<MaandResultaat> {
-  let omzetSom = 0;
-  let kostprijsSom = 0;
-  let overigeKostenSom = 0;
-  for (const line of lines) {
-    const code = Number(line.GLAccountCode);
-    const amount = Number(line.AmountDC);
-    if (code >= 8000 && code < 9000) omzetSom += amount;
-    else if (code >= 7000 && code < 8000) kostprijsSom += amount;
-    else if (code >= 4000 && code < 7000) overigeKostenSom += amount;
-  }
-  const omzet = Math.round(Math.abs(omzetSom) * 100) / 100;
-  const kostprijs = Math.round(Math.abs(kostprijsSom) * 100) / 100;
-  const overigeKosten = Math.round(Math.abs(overigeKostenSom) * 100) / 100;
-  return { jaar, maand, omzet, kostprijs, overigeKosten, nettoResultaat: Math.round((omzet - kostprijs - overigeKosten) * 100) / 100 };
-}
-
-export async function getResultaatPerMaand(jaar: number, maand: number): Promise<MaandResultaat> {
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${maand}`
-  );
-  return berekenResultaat(lines as Array<{ AmountDC: number; GLAccountCode: string }>, jaar, maand);
-}
-
-export async function getResultaatYTD(jaar: number, totMaand: number): Promise<MaandResultaat> {
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC&$filter=FinancialYear eq ${jaar} and FinancialPeriod le ${totMaand}`
-  );
-  return berekenResultaat(lines as Array<{ AmountDC: number; GLAccountCode: string }>, jaar, totMaand);
-}
-
+// ─── Openstaande facturen ──────────────────────────────────────────────────────
 export async function getOpenstaandeFacturen(): Promise<Receivable[]> {
-  // Exact Online cashflow/Receivables geeft { "d": [...] } (array), niet { "d": { "results": [...] } }
-  // AmountDC = restbedrag na betaling (0 als volledig betaald)
-  // TransactionAmountDC = oorspronkelijk factuurbedrag
-  // IsFullyPaid eq false = alleen openstaande facturen
-  try {
-    const data = await exactFetch(
-      `cashflow/Receivables?$select=AccountName,InvoiceNumber,TransactionAmountDC,DueDate,InvoiceDate,Description,IsFullyPaid&$filter=IsFullyPaid eq false&$orderby=DueDate asc`
-    ) as { d: Receivable[] | { results: Receivable[] } };
-    const items = Array.isArray(data?.d) ? data.d : (data?.d?.results ?? []);
-    return items as Receivable[];
-  } catch {
-    // Fallback: zonder $orderby
-    try {
-      const data = await exactFetch(
-        `cashflow/Receivables?$select=AccountName,InvoiceNumber,TransactionAmountDC,DueDate,InvoiceDate,Description,IsFullyPaid&$filter=IsFullyPaid eq false`
-      ) as { d: Receivable[] | { results: Receivable[] } };
-      const items = Array.isArray(data?.d) ? data.d : (data?.d?.results ?? []);
-      return items as Receivable[];
-    } catch {
-      return [];
+  const items = await getReceivablesData();
+  return items as Receivable[];
+}
+
+// ─── Kosten per categorie ──────────────────────────────────────────────────────
+export async function getKostenPerCategorie(
+  jaar: number,
+  maand?: number
+): Promise<{ code: string; omschrijving: string; bedrag: number; categorie: "kostprijs" | "overig" }[]> {
+  const lines = await getTransactionLinesForJaar(jaar);
+  const filtered = maand ? lines.filter((l) => l.FinancialPeriod === maand) : lines;
+
+  const map = new Map<string, { omschrijving: string; bedrag: number; categorie: "kostprijs" | "overig" }>();
+  for (const line of filtered) {
+    const code = Number(line.GLAccountCode);
+    if (code < 4000 || code >= 8000) continue;
+    const cat: "kostprijs" | "overig" = code >= 7000 ? "kostprijs" : "overig";
+    const existing = map.get(line.GLAccountCode);
+    if (existing) {
+      existing.bedrag += Math.abs(line.AmountDC);
+    } else {
+      map.set(line.GLAccountCode, {
+        omschrijving: line.GLAccountDescription,
+        bedrag: Math.abs(line.AmountDC),
+        categorie: cat,
+      });
     }
   }
+
+  return Array.from(map.entries())
+    .map(([code, v]) => ({ code, ...v }))
+    .sort((a, b) => b.bedrag - a.bedrag);
 }
 
-export async function getResultaatAlleMandenVoorJaar(jaar: number): Promise<MaandResultaat[]> {
-  // Één API-call voor alle 12 maanden — voorkomt 12× rate-limit hits
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`
-  ) as Array<{ GLAccountCode: string; AmountDC: number; FinancialPeriod: number }>;
-
-  const byPeriod = new Map<number, Array<{ GLAccountCode: string; AmountDC: number }>>();
-  for (const line of lines) {
-    const p = line.FinancialPeriod ?? 0;
-    if (!byPeriod.has(p)) byPeriod.set(p, []);
-    byPeriod.get(p)!.push({ GLAccountCode: line.GLAccountCode, AmountDC: line.AmountDC });
-  }
-
-  return Promise.all(
-    Array.from({ length: 12 }, async (_, i) => {
-      const maand = i + 1;
-      return berekenResultaat(byPeriod.get(maand) ?? [], jaar, maand);
-    })
-  );
-}
-
+// ─── Omzet per klant ──────────────────────────────────────────────────────────
 export async function getOmzetPerKlant(
   jaar: number,
   maand?: number
 ): Promise<{ naam: string; bedrag: number; percentage: number }[]> {
-  // SalesInvoices ondersteunt geen FinancialYear filter — gebruik datumbereik
-  const vanDatum = maand
-    ? `${jaar}-${String(maand).padStart(2, "0")}-01`
-    : `${jaar}-01-01`;
-  const totDatum = maand
-    ? new Date(jaar, maand, 1).toISOString().slice(0, 10)
-    : `${jaar + 1}-01-01`;
-  const invoices = await exactFetchAll(
-    `salesinvoice/SalesInvoices?$select=OrderedByName,AmountDC&$filter=InvoiceDate ge datetime'${vanDatum}T00:00:00' and InvoiceDate lt datetime'${totDatum}T00:00:00'`
-  ) as Array<{ OrderedByName: string; AmountDC: number }>;
+  const invoices = await getSalesInvoicesForJaar(jaar);
+
+  // Optioneel filteren op maand (client-side, uit gecachede dataset)
+  const filtered = maand
+    ? invoices.filter((inv) => {
+        const d = new Date(inv.InvoiceDate);
+        return d.getMonth() + 1 === maand;
+      })
+    : invoices;
 
   const map = new Map<string, number>();
-  for (const inv of invoices) {
+  for (const inv of filtered) {
     const naam = inv.OrderedByName || "Onbekend";
     map.set(naam, (map.get(naam) ?? 0) + Math.abs(inv.AmountDC));
   }
@@ -288,29 +310,4 @@ export async function getKlantenVergelijking(jaarHuidig: number, jaarVorig: numb
     huidig,
     vorig,
   };
-}
-
-export async function getKostenPerCategorie(
-  jaar: number,
-  maand?: number
-): Promise<{ code: string; omschrijving: string; bedrag: number; categorie: "kostprijs" | "overig" }[]> {
-  const maandFilter = maand ? ` and FinancialPeriod eq ${maand}` : "";
-  const lines = await exactFetchAll(
-    `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC&$filter=FinancialYear eq ${jaar} and GLAccountCode ge '4000' and GLAccountCode lt '8000'${maandFilter}`
-  ) as Array<{ GLAccountCode: string; GLAccountDescription: string; AmountDC: number }>;
-
-  const map = new Map<string, { omschrijving: string; bedrag: number; categorie: "kostprijs" | "overig" }>();
-  for (const l of lines) {
-    const code = l.GLAccountCode;
-    const cat: "kostprijs" | "overig" = code >= "7000" && code < "8000" ? "kostprijs" : "overig";
-    const existing = map.get(code);
-    if (existing) {
-      existing.bedrag += Math.abs(l.AmountDC);
-    } else {
-      map.set(code, { omschrijving: l.GLAccountDescription, bedrag: Math.abs(l.AmountDC), categorie: cat });
-    }
-  }
-  return Array.from(map.entries())
-    .map(([code, v]) => ({ code, ...v }))
-    .sort((a, b) => b.bedrag - a.bedrag);
 }
