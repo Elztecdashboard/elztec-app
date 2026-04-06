@@ -10,10 +10,6 @@ const DIVISION = Number(process.env.EXACT_DIVISION || 2377678);
 // → cache is altijd warm, gebruikers raken nooit een cold start.
 const CACHE_TTL_MS = 20 * 60 * 1000;
 
-// Vertraging tussen gepagineerde Exact Online calls (rate limit bescherming).
-// 800ms per pagina = max ~6s voor 8 pagina's, ruim binnen Vercel's 10s timeout.
-const PAGE_DELAY_MS = 800;
-
 // Marker voor "cache koud" fouten — dashboard toont een vriendelijk banner
 // in plaats van een rode foutmelding. Alleen Make.com vult de cache.
 export const CACHE_KOUD = "CACHE_KOUD";
@@ -158,9 +154,6 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
     const json = await resp!.json() as { d: { results: unknown[]; __next?: string } };
     results.push(...(json.d?.results ?? []));
     nextUrl = json.d?.__next ?? null;
-
-    // Vertraging tussen pagina's om Exact Online rate limits te voorkomen
-    if (nextUrl) await sleep(PAGE_DELAY_MS);
   }
 
   return results;
@@ -199,7 +192,9 @@ export const getReceivablesData = cache(async (): Promise<unknown[]> => {
 
 export async function warmTransactionLines(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  const path = `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
+  // $top=1000 — haalt 1000 records per pagina op i.p.v. de standaard ~60.
+  // Reduceert het aantal API-calls van ~40 naar 2-3 → warm-cache klaar in <5s.
+  const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
   const lines = await fetchAllPages(path, token, division);
   await writeCache(`tx-${jaar}`, lines);
   return lines.length;
@@ -207,7 +202,7 @@ export async function warmTransactionLines(jaar: number): Promise<number> {
 
 export async function warmSalesInvoices(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  const path = `salesinvoice/SalesInvoices?$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
+  const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
   const invoices = await fetchAllPages(path, token, division);
   await writeCache(`si-${jaar}`, invoices);
   return invoices.length;
