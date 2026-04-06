@@ -194,16 +194,15 @@ export const getReceivablesData = cache(async (): Promise<unknown[]> => {
 // Deze functies slaan de cache read over en halen altijd vers data op,
 // zodat Make.com de cache kan opwarmen vóór hij verloopt.
 
-export async function warmTransactionLines(jaar: number): Promise<number> {
+export async function warmTransactionLines(jaar: number, maxPeriode = 12): Promise<number> {
   const { token, division } = await getValidAccessToken();
   // Exact Online ondersteunt geen $skip op TransactionLines en retourneert geen __next
-  // als resultaten exact gelijk zijn aan $top=1000. Fix: haal per FinancialPeriod (1-12) op.
-  // Elke periode heeft max ~300 records → nooit truncatie, ~2 API calls per periode.
-  // Make.com roept tx-current en tx-prev als aparte modules aan (met tussentijd),
-  // dus er is geen rate limiting risico in productie.
+  // als resultaten exact gelijk zijn aan $top=1000. Fix: haal per FinancialPeriod op.
+  // maxPeriode: voor het huidig jaar alleen tot en met de huidige maand (bijv. 4 voor april),
+  // voor het vorig jaar altijd 12. Dit beperkt het totaal API-calls en voorkomt rate limits.
   const allLines: unknown[] = [];
-  for (let periode = 1; periode <= 12; periode++) {
-    if (periode > 1) await sleep(700); // Voorkom Exact Online rate limiting (12 calls × 700ms = 7.7s extra)
+  for (let periode = 1; periode <= maxPeriode; periode++) {
+    if (periode > 1) await sleep(700); // Voorkom Exact Online rate limiting
     const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
     const lines = await fetchAllPages(path, token, division);
     allLines.push(...lines);

@@ -31,13 +31,18 @@ export async function GET(req: NextRequest) {
   const nu = new Date();
   const huidigJaar = nu.getFullYear();
   const vorigJaar = huidigJaar - 1;
+  // Voor het huidige jaar alleen periodes t/m de huidige maand ophalen.
+  // Toekomstige periodes bevatten alleen kleine budget-regels (~9-12/maand) die
+  // niet relevant zijn voor het dashboard. Dit halveert het aantal Exact Online
+  // API-calls voor tx-current en voorkomt rate limiting bij tx-current + tx-prev.
+  const huidigeMaand = nu.getMonth() + 1; // 1-12
 
   try {
     let count = 0;
 
     switch (key) {
       case "tx-current":
-        count = await warmTransactionLines(huidigJaar);
+        count = await warmTransactionLines(huidigJaar, huidigeMaand);
         break;
       case "tx-prev":
         count = await warmTransactionLines(vorigJaar);
