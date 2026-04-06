@@ -192,19 +192,34 @@ export const getReceivablesData = cache(async (): Promise<unknown[]> => {
 
 export async function warmTransactionLines(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  // $top=1000 — haalt 1000 records per pagina op i.p.v. de standaard ~60.
-  // Reduceert het aantal API-calls van ~40 naar 2-3 → warm-cache klaar in <5s.
-  const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
-  const lines = await fetchAllPages(path, token, division);
-  await writeCache(`tx-${jaar}`, lines);
-  return lines.length;
+  // Haal per FinancialPeriod (1–12) op zodat we nooit de $top=1000 limiet raken.
+  // Exact Online retourneert geen __next als resultaten exact gelijk zijn aan $top,
+  // waardoor een jaarquery van 1000 records stilletjes afgekapt kan worden.
+  // Per-periode: max ~300 records → altijd compleet, 12 calls × ~400ms ≈ 5s.
+  const allLines: unknown[] = [];
+  for (let periode = 1; periode <= 12; periode++) {
+    const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
+    const lines = await fetchAllPages(path, token, division);
+    allLines.push(...lines);
+  }
+  await writeCache(`tx-${jaar}`, allLines);
+  return allLines.length;
 }
 
 export async function warmSalesInvoices(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
-  const raw = await fetchAllPages(path, token, division);
-  const invoices = convertODataDates(raw) as unknown[];
+  // Haal per maand op om de $top=1000 limiet te vermijden (zelfde redenering als tx).
+  const allInvoices: unknown[] = [];
+  for (let maand = 1; maand <= 12; maand++) {
+    const vanDate = `${jaar}-${String(maand).padStart(2, "0")}-01T00:00:00`;
+    const totDate = maand < 12
+      ? `${jaar}-${String(maand + 1).padStart(2, "0")}-01T00:00:00`
+      : `${jaar + 1}-01-01T00:00:00`;
+    const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${vanDate}' and InvoiceDate lt datetime'${totDate}'`;
+    const raw = await fetchAllPages(path, token, division);
+    allInvoices.push(...raw);
+  }
+  const invoices = convertODataDates(allInvoices) as unknown[];
   await writeCache(`si-${jaar}`, invoices);
   return invoices.length;
 }
