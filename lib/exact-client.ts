@@ -6,9 +6,17 @@ const BASE_URL = "https://start.exactonline.nl/api/v1";
 const TOKEN_URL = "https://start.exactonline.nl/api/oauth2/token";
 const DIVISION = Number(process.env.EXACT_DIVISION || 2377678);
 
-// Cache TTL: 20 minuten. Make.com warmt de cache op elke 10 minuten
+// Cache TTL: 20 minuten. Make.com warmt de cache op elke 8 minuten
 // → cache is altijd warm, gebruikers raken nooit een cold start.
 const CACHE_TTL_MS = 20 * 60 * 1000;
+
+// Vertraging tussen gepagineerde Exact Online calls (rate limit bescherming).
+// 800ms per pagina = max ~6s voor 8 pagina's, ruim binnen Vercel's 10s timeout.
+const PAGE_DELAY_MS = 800;
+
+// Marker voor "cache koud" fouten — dashboard toont een vriendelijk banner
+// in plaats van een rode foutmelding. Alleen Make.com vult de cache.
+export const CACHE_KOUD = "CACHE_KOUD";
 
 // ─── Types voor gecachede datasets ────────────────────────────────────────────
 export interface TransactionLine {
@@ -150,6 +158,9 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
     const json = await resp!.json() as { d: { results: unknown[]; __next?: string } };
     results.push(...(json.d?.results ?? []));
     nextUrl = json.d?.__next ?? null;
+
+    // Vertraging tussen pagina's om Exact Online rate limits te voorkomen
+    if (nextUrl) await sleep(PAGE_DELAY_MS);
   }
 
   return results;
@@ -163,40 +174,23 @@ export const getTransactionLinesForJaar = cache(async (jaar: number): Promise<Tr
   const cached = await readCache<TransactionLine>(`tx-${jaar}`);
   if (cached) return cached;
 
-  // Cache miss: haal op bij Exact Online (normaal alleen bij cold start)
-  const { token, division } = await getValidAccessToken();
-  const path = `financialtransaction/TransactionLines?$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
-  const lines = await fetchAllPages(path, token, division);
-  await writeCache(`tx-${jaar}`, lines);
-  return lines as TransactionLine[];
+  // Cache leeg — alleen Make.com (via /api/exact/warm-cache) mag Exact Online aanroepen.
+  // Het dashboard toont een vriendelijke "data wordt geladen" melding.
+  throw new Error(`${CACHE_KOUD}:tx-${jaar}`);
 });
 
 export const getSalesInvoicesForJaar = cache(async (jaar: number): Promise<SalesInvoiceLine[]> => {
   const cached = await readCache<SalesInvoiceLine>(`si-${jaar}`);
   if (cached) return cached;
 
-  const { token, division } = await getValidAccessToken();
-  const path = `salesinvoice/SalesInvoices?$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
-  const invoices = await fetchAllPages(path, token, division);
-  await writeCache(`si-${jaar}`, invoices);
-  return invoices as SalesInvoiceLine[];
+  throw new Error(`${CACHE_KOUD}:si-${jaar}`);
 });
 
 export const getReceivablesData = cache(async (): Promise<unknown[]> => {
   const cached = await readCache<unknown>("recv");
   if (cached) return cached;
 
-  const { token, division } = await getValidAccessToken();
-  // Receivables geeft { "d": [...] }, niet { "d": { "results": [...] } }
-  const url = `${BASE_URL}/${division}/cashflow/Receivables?$select=AccountName,InvoiceNumber,TransactionAmountDC,DueDate,InvoiceDate,Description,IsFullyPaid&$filter=IsFullyPaid eq false&$orderby=DueDate asc`;
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  });
-  if (!resp.ok) throw new Error(`Exact API fout: ${resp.status} cashflow/Receivables`);
-  const data = await resp.json() as { d: unknown[] | { results: unknown[] } };
-  const items = Array.isArray(data?.d) ? data.d : ((data?.d as { results: unknown[] })?.results ?? []);
-  await writeCache("recv", items as unknown[]);
-  return items as unknown[];
+  throw new Error(`${CACHE_KOUD}:recv`);
 });
 
 // ─── Cache warm-up functies (gebruikt door /api/exact/warm-cache) ──────────────

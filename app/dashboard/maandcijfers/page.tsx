@@ -1,4 +1,6 @@
 import { getResultaatPerMaand, getMargeDataPerMaand } from "@/lib/exact-queries";
+import { CACHE_KOUD } from "@/lib/exact-client";
+import DataLaadtBanner from "@/components/DataLaadtBanner";
 import { MaandResultaat } from "@/types";
 import PaginaHeader from "@/components/PaginaHeader";
 import Link from "next/link";
@@ -68,12 +70,18 @@ export default async function MaandcijfersPage({
   const vorigeJaar = geselecteerdMaand === 1 ? geselecteerdJaar - 1 : geselecteerdJaar;
   const vorigeMaand = geselecteerdMaand === 1 ? 12 : geselecteerdMaand - 1;
 
-  const [huidig, vorig, vorigJaarData, margeData] = await Promise.all([
-    getResultaatPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
-    getResultaatPerMaand(vorigeJaar, vorigeMaand).catch(() => null),
-    getResultaatPerMaand(geselecteerdJaar - 1, geselecteerdMaand).catch(() => null),
-    getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
-  ]);
+  let huidig, vorig, vorigJaarData, margeData;
+  try {
+    [huidig, vorig, vorigJaarData, margeData] = await Promise.all([
+      getResultaatPerMaand(geselecteerdJaar, geselecteerdMaand),
+      getResultaatPerMaand(vorigeJaar, vorigeMaand).catch(() => null),
+      getResultaatPerMaand(geselecteerdJaar - 1, geselecteerdMaand).catch(() => null),
+      getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
+    ]);
+  } catch (err) {
+    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
+    huidig = null; vorig = null; vorigJaarData = null; margeData = null;
+  }
 
   // Navigation links
   const vorigeNavJaar = geselecteerdMaand === 1 ? geselecteerdJaar - 1 : geselecteerdJaar;

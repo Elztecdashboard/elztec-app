@@ -3,7 +3,8 @@ import {
   getResultaatAlleMandenVoorJaar,
   getOpenstaandeFacturen,
 } from "@/lib/exact-queries";
-import { isExactGekoppeld } from "@/lib/exact-client";
+import { isExactGekoppeld, CACHE_KOUD } from "@/lib/exact-client";
+import DataLaadtBanner from "@/components/DataLaadtBanner";
 import KpiCard from "@/components/KpiCard";
 import PaginaHeader from "@/components/PaginaHeader";
 import TrendLijnGrafiek from "@/components/TrendLijnGrafiek";
@@ -44,10 +45,11 @@ export default async function DashboardPage() {
     alleMandenVorig = await getResultaatAlleMandenVoorJaar(jaar - 1);
     facturen = await getOpenstaandeFacturen();
   } catch (err) {
+    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
         <p className="text-red-600 font-semibold">Fout bij laden van Exact Online data</p>
-        <p className="text-gray-500 text-sm max-w-md">{String(err)}</p>
+        <p className="text-gray-500 text-sm max-w-md">Er is een onverwachte fout opgetreden. Controleer de Exact Online koppeling.</p>
         <Link href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
           Exact Online opnieuw koppelen →
         </Link>

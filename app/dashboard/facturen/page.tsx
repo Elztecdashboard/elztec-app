@@ -1,7 +1,10 @@
 import FacturenTabs from "@/components/FacturenTabs";
 import FacturenExport from "@/components/FacturenExport";
 import { getOpenstaandeFacturen } from "@/lib/exact-queries";
+import { CACHE_KOUD } from "@/lib/exact-client";
+import DataLaadtBanner from "@/components/DataLaadtBanner";
 import PaginaHeader from "@/components/PaginaHeader";
+import { Receivable } from "@/types";
 
 function formatEur(bedrag: number) {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(bedrag);
@@ -12,7 +15,13 @@ function dagentot(dueDate: string): number {
 }
 
 export default async function FacturenPage() {
-  const facturen = await getOpenstaandeFacturen().catch(() => []);
+  let facturen: Receivable[];
+  try {
+    facturen = await getOpenstaandeFacturen();
+  } catch (err) {
+    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
+    facturen = [];
+  }
   const totaal = facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
   // Aging buckets
