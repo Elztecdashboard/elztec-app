@@ -63,6 +63,14 @@ async function saveTokens(
 // slechts één keer getValidAccessToken aan, ook al gaat elk via exactFetch.
 // Dit voorkomt de race condition waarbij twee concurrent refreshes het
 // Exact Online rotating refresh token allebei proberen te gebruiken.
+// TOKEN KEEPER PATROON:
+// Make.com vernieuwt het token elke 8 minuten proactief. Gebruikers refreshen nooit
+// actief — zij lezen alleen een vers token uit Supabase. Dit voorkomt de race condition
+// waarbij meerdere gelijktijdige requests hetzelfde single-use refresh token opgebruiken.
+//
+// Race condition guard: als updated_at < 30 seconden geleden, heeft een ander proces
+// (Make.com of een concurrent request) het token net ververst. Gebruik dat token direct,
+// ook al lijkt het bijna verlopen op basis van de oude expires_at waarde.
 const getValidAccessToken = cache(async (): Promise<{ token: string; division: number }> => {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
@@ -77,14 +85,18 @@ const getValidAccessToken = cache(async (): Promise<{ token: string; division: n
 
   const row = data as ExactTokenRow;
   const expiresAt = new Date(row.expires_at).getTime();
+  const updatedAt = new Date(row.updated_at).getTime();
+  const recentlyRefreshed = Date.now() - updatedAt < 30_000;
 
-  if (expiresAt > Date.now() + 60_000) {
+  // Token geldig voor meer dan 3 minuten, of zojuist ververst door een ander proces
+  if (expiresAt > Date.now() + 180_000 || recentlyRefreshed) {
     return { token: row.access_token, division: row.division };
   }
 
-  // Token verloopt binnen 60 seconden of is al verlopen → probeer refresh
+  // Noodgeval: token verlopen én niet recent ververst (Make.com heeft het gemist)
+  // Failsafe refresh — normaal doet Make.com dit vóór we hier komen
+  console.warn("[getValidAccessToken] Noodfallback: token niet op tijd ververst door Make.com");
   const newTokens = await fetchNewTokens(row.refresh_token);
-  // Als Exact Online zegt dat het token nog niet verlopen is, gebruik het gewoon
   if (!newTokens) {
     return { token: row.access_token, division: row.division };
   }
@@ -251,13 +263,15 @@ export async function refreshExactTokenProactive(): Promise<{ refreshed: boolean
   const row = data as ExactTokenRow;
   const expiresAt = new Date(row.expires_at).getTime();
 
-  // Alleen refreshen als het token binnen 2 minuten verloopt
-  // (cron draait elke 8 minuten, token geldig ~10 minuten)
-  if (expiresAt > Date.now() + 120_000) {
+  // Refreshen als token binnen 3 minuten verloopt.
+  // Make.com draait elke 8 minuten → token van 10 min leeft op T+8 nog 2 min → refresh.
+  // 3-minuten buffer geeft ruimte voor kleine vertragingen in het Make.com schema.
+  if (expiresAt > Date.now() + 180_000) {
     return { refreshed: false };
   }
 
   const newTokens = await fetchNewTokens(row.refresh_token);
+  if (!newTokens) return { refreshed: false }; // Exact zegt: token nog niet verlopen
   await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
   return { refreshed: true };
 }
