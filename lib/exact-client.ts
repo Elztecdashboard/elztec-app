@@ -203,7 +203,7 @@ export async function warmTransactionLines(jaar: number): Promise<number> {
   // dus er is geen rate limiting risico in productie.
   const allLines: unknown[] = [];
   for (let periode = 1; periode <= 12; periode++) {
-    if (periode > 1) await sleep(350); // Voorkom Exact Online rate limiting bij snelle calls
+    if (periode > 1) await sleep(700); // Voorkom Exact Online rate limiting (12 calls × 700ms = 7.7s extra)
     const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
     const lines = await fetchAllPages(path, token, division);
     allLines.push(...lines);
