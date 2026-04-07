@@ -71,7 +71,10 @@ export async function GET(req: NextRequest) {
     }
 
     console.log(`[warm-cache] ${key}: ${count} items gecached`);
-    return NextResponse.json({ ok: true, key, count, cachedAt: new Date().toISOString() });
+    return NextResponse.json(
+      { ok: true, key, count, cachedAt: new Date().toISOString() },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (e) {
     console.error("[warm-cache]", key, e);
     return NextResponse.json({ ok: false, key, error: String(e) }, { status: 500 });
