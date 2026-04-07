@@ -151,8 +151,9 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (resp.status !== 429) break;
-      const retryAfter = Number(resp.headers.get("Retry-After") ?? 5);
-      // Respecteer Retry-After volledig (max 45s zodat we binnen maxDuration=60 blijven)
+      // Exact Online stuurt zelden Retry-After. Default 30s zorgt dat de rate-limit
+      // window (waarschijnlijk ~30s) reset vóór de volgende poging.
+      const retryAfter = Number(resp.headers.get("Retry-After") ?? 30);
       await sleep(Math.min(retryAfter, 45) * 1000);
     }
     if (!resp!.ok) throw new Error(`Exact API fout: ${resp!.status} ${path}`);
