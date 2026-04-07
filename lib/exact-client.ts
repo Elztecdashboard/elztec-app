@@ -8,7 +8,7 @@ const DIVISION = Number(process.env.EXACT_DIVISION || 2377678);
 
 // Cache TTL: 20 minuten. Make.com warmt de cache op elke 8 minuten
 // → cache is altijd warm, gebruikers raken nooit een cold start.
-const CACHE_TTL_MS = 20 * 60 * 1000;
+const CACHE_TTL_MS = 40 * 60 * 1000; // 40 min — ruim boven het 8-minuten interval van Make.com
 
 // Marker voor "cache koud" fouten — dashboard toont een vriendelijk banner
 // in plaats van een rode foutmelding. Alleen Make.com vult de cache.
