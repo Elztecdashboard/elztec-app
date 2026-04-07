@@ -1,5 +1,6 @@
 import { getResultaatPerMaand, getMargeDataPerMaand } from "@/lib/exact-queries";
 import { MaandResultaat } from "@/types";
+import ExactFout from "@/components/ExactFout";
 import PaginaHeader from "@/components/PaginaHeader";
 import Link from "next/link";
 import { MAANDEN_LANG } from "@/lib/utils";
@@ -77,7 +78,8 @@ export default async function MaandcijfersPage({
       getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
     ]);
   } catch (err) {
-    huidig = null; vorig = null; vorigJaarData = null; margeData = null;
+    void err;
+    return <ExactFout />;
   }
 
   // Navigation links

@@ -1,4 +1,5 @@
 import { getKlantenVergelijking, getOpenstaandeFacturen } from "@/lib/exact-queries";
+import ExactFout from "@/components/ExactFout";
 import PaginaHeader from "@/components/PaginaHeader";
 import Link from "next/link";
 import { formatBedrag } from "@/lib/utils";
@@ -23,15 +24,8 @@ export default async function KlantenPage({
       getOpenstaandeFacturen(),
     ]);
   } catch (err) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-        <p className="text-red-600 font-semibold">Fout bij laden van klantanalyse</p>
-        <p className="text-gray-500 text-sm max-w-md">Er is een onverwachte fout opgetreden. Controleer de Exact Online koppeling.</p>
-        <a href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
-          Exact Online opnieuw koppelen →
-        </a>
-      </div>
-    );
+    void err;
+    return <ExactFout />;
   }
 
   // Build top klanten vergelijking

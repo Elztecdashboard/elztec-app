@@ -1,4 +1,5 @@
 import { getOpbrengstGroepen, getOmzetPerKlant } from "@/lib/exact-queries";
+import ExactFout from "@/components/ExactFout";
 import PaginaHeader from "@/components/PaginaHeader";
 import StaafGrafiek from "@/components/StaafGrafiek";
 import Link from "next/link";
@@ -24,15 +25,8 @@ export default async function OmzetPage({
       getOmzetPerKlant(geselecteerdJaar),
     ]);
   } catch (err) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-        <p className="text-red-600 font-semibold">Fout bij laden van omzetanalyse</p>
-        <p className="text-gray-500 text-sm max-w-md">Er is een onverwachte fout opgetreden. Controleer de Exact Online koppeling.</p>
-        <a href="/exact/connect" className="bg-[#001D3A] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#6979D6] transition">
-          Exact Online opnieuw koppelen →
-        </a>
-      </div>
-    );
+    void err;
+    return <ExactFout />;
   }
 
   const top8Soorten = opbrengstGroepen.slice(0, 8);

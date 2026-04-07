@@ -10,9 +10,12 @@ const DIVISION = Number(process.env.EXACT_DIVISION || 2377678);
 // → cache is altijd warm, gebruikers raken nooit een cold start.
 const CACHE_TTL_MS = 40 * 60 * 1000; // 40 min — ruim boven het 8-minuten interval van Make.com
 
-// Marker voor "cache koud" fouten — dashboard toont een vriendelijk banner
-// in plaats van een rode foutmelding. Alleen Make.com vult de cache.
+// Marker voor "cache koud" fouten (legacy, niet meer in gebruik)
 export const CACHE_KOUD = "CACHE_KOUD";
+
+// Marker voor "Exact Online koppeling verlopen" — refresh token ongeldig.
+// Admin moet opnieuw koppelen via /exact/connect.
+export const EXACT_DISCONNECTED = "EXACT_DISCONNECTED";
 
 // ─── Types voor gecachede datasets ────────────────────────────────────────────
 export interface TransactionLine {
@@ -52,7 +55,11 @@ async function fetchNewTokens(refreshToken: string): Promise<{
     const errText = await resp.text();
     console.error("[fetchNewTokens] Refresh mislukt:", resp.status, errText);
     if (errText.includes("access_token not expired")) return null;
-    throw new Error("Token vernieuwen mislukt. Koppel Exact Online opnieuw via /exact/connect.");
+    // invalid_grant = refresh token is verlopen of ingetrokken → admin moet opnieuw koppelen
+    if (errText.includes("invalid_grant") || errText.includes("invalid_client") || resp.status === 400) {
+      throw new Error(`${EXACT_DISCONNECTED}: Exact Online refresh token ongeldig. Ga naar /exact/connect.`);
+    }
+    throw new Error(`Exact token vernieuwen mislukt (${resp.status}). Probeer later opnieuw.`);
   }
 
   const json = await resp.json();

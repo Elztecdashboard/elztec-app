@@ -1,6 +1,7 @@
 import FacturenTabs from "@/components/FacturenTabs";
 import FacturenExport from "@/components/FacturenExport";
 import { getOpenstaandeFacturen } from "@/lib/exact-queries";
+import ExactFout from "@/components/ExactFout";
 import PaginaHeader from "@/components/PaginaHeader";
 import { Receivable } from "@/types";
 
@@ -20,7 +21,8 @@ export default async function FacturenPage() {
   try {
     facturen = await getOpenstaandeFacturen();
   } catch (err) {
-    facturen = [];
+    void err;
+    return <ExactFout />;
   }
   const totaal = facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
 
