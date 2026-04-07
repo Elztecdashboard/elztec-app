@@ -15,7 +15,7 @@ const NAV = [
   { href: "/dashboard/facturen", label: "Facturen" },
 ];
 
-export default function NavSidebar({ email }: { email: string }) {
+export default function NavSidebar({ email, rol }: { email: string; rol: string }) {
   const pad = usePathname();
   const router = useRouter();
 
@@ -45,6 +45,14 @@ export default function NavSidebar({ email }: { email: string }) {
             </Link>
           );
         })}
+        {rol === "admin" && (
+          <Link
+            href="/dashboard/beheer"
+            className={`block px-3 py-2 rounded-lg text-sm transition ${pad.startsWith("/dashboard/beheer") ? "bg-[#6979D6] font-semibold" : "hover:bg-white/10"}`}
+          >
+            Beheer
+          </Link>
+        )}
       </nav>
 
       <div className="px-5 py-4 border-t border-white/10">

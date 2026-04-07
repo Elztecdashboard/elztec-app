@@ -20,9 +20,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect("/login");
 
+  const { data: roleRow } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", session.user.id)
+    .single();
+  const rol = roleRow?.role ?? "lezer";
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <NavSidebar email={session.user.email ?? ""} />
+      <NavSidebar email={session.user.email ?? ""} rol={rol} />
       <main className="flex-1 overflow-y-auto p-8">
         {children}
       </main>
