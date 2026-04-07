@@ -33,7 +33,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const key = req.nextUrl.searchParams.get("key");
+  // Lees key uit query param OF JSON body — Make.com stuurt query params soms
+  // niet mee bij POST-requests; dan staat de key in de JSON body.
+  let key = req.nextUrl.searchParams.get("key");
+  if (!key) {
+    try {
+      const body = await req.json();
+      key = body?.key ?? null;
+    } catch {
+      // geen JSON body — key blijft null
+    }
+  }
   const nu = new Date();
   const huidigJaar = nu.getFullYear();
   const vorigJaar = huidigJaar - 1;
