@@ -5,8 +5,12 @@ import {
   warmReceivables,
 } from "@/lib/exact-client";
 
+// force-dynamic: voorkomt dat Next.js/Vercel de GET-response cachet.
+// Zonder dit wordt de cached HTTP-response teruggestuurd en loopt de
+// Supabase-schrijfactie nooit — waardoor de cache nooit wordt ververst.
+export const dynamic = "force-dynamic";
+
 // Vercel Hobby: max 60s per serverless function.
-// tx-current/prev halen 12 periodes op (~5-8s) — verhoog limiet voor zekerheid.
 export const maxDuration = 60;
 
 /**

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { refreshExactTokenProactive } from "@/lib/exact-client";
 
+export const dynamic = "force-dynamic"; // Nooit cachen
+
 // Vercel stuurt automatisch "Authorization: Bearer {CRON_SECRET}" mee bij cron-aanroepen
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
