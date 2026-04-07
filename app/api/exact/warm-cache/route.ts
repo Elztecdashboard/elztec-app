@@ -24,7 +24,9 @@ export const maxDuration = 60;
  * Make.com roept elke sleutel sequentieel aan (één HTTP module per sleutel)
  * om Exact Online rate limits te voorkomen.
  */
-export async function GET(req: NextRequest) {
+// POST wordt nooit gecached door Vercel/CDN — GET wel.
+// Dit is de enige betrouwbare fix voor het Vercel edge caching probleem.
+export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
