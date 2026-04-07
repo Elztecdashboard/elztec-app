@@ -83,22 +83,25 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
   const { supabase } = auth;
 
-  const { email, naam, role } = await req.json();
+  const { email, naam, role, wachtwoord } = await req.json();
 
-  if (!email || !role) {
-    return NextResponse.json({ error: "email en role zijn verplicht" }, { status: 400 });
+  if (!email || !role || !wachtwoord) {
+    return NextResponse.json({ error: "email, role en wachtwoord zijn verplicht" }, { status: 400 });
   }
 
-  const { data: invited, error: invErr } =
-    await supabase.auth.admin.inviteUserByEmail(email);
+  const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+    email,
+    password: wachtwoord,
+    email_confirm: true,
+  });
 
-  if (invErr) {
-    return NextResponse.json({ error: invErr.message }, { status: 400 });
+  if (createErr) {
+    return NextResponse.json({ error: createErr.message }, { status: 400 });
   }
 
   await supabase
     .from("user_roles")
-    .upsert({ user_id: invited.user.id, role, naam }, { onConflict: "user_id" });
+    .upsert({ user_id: created.user.id, role, naam }, { onConflict: "user_id" });
 
   return NextResponse.json({ ok: true });
 }
@@ -108,18 +111,30 @@ export async function PUT(req: NextRequest) {
   if (auth.error) return auth.error;
   const { supabase } = auth;
 
-  const { user_id, role } = await req.json();
+  const { user_id, role, wachtwoord } = await req.json();
 
-  if (!user_id || !role) {
-    return NextResponse.json({ error: "user_id en role zijn verplicht" }, { status: 400 });
+  if (!user_id) {
+    return NextResponse.json({ error: "user_id is verplicht" }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from("user_roles")
-    .upsert({ user_id, role }, { onConflict: "user_id" });
+  // Wachtwoord wijzigen
+  if (wachtwoord) {
+    const { error: pwErr } = await supabase.auth.admin.updateUserById(user_id, {
+      password: wachtwoord,
+    });
+    if (pwErr) {
+      return NextResponse.json({ error: pwErr.message }, { status: 500 });
+    }
+  }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Rol wijzigen
+  if (role) {
+    const { error } = await supabase
+      .from("user_roles")
+      .upsert({ user_id, role }, { onConflict: "user_id" });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });
