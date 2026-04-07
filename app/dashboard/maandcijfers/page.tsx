@@ -1,6 +1,4 @@
 import { getResultaatPerMaand, getMargeDataPerMaand } from "@/lib/exact-queries";
-import { CACHE_KOUD } from "@/lib/exact-client";
-import DataLaadtBanner from "@/components/DataLaadtBanner";
 import { MaandResultaat } from "@/types";
 import PaginaHeader from "@/components/PaginaHeader";
 import Link from "next/link";
@@ -79,7 +77,6 @@ export default async function MaandcijfersPage({
       getMargeDataPerMaand(geselecteerdJaar, geselecteerdMaand).catch(() => null),
     ]);
   } catch (err) {
-    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     huidig = null; vorig = null; vorigJaarData = null; margeData = null;
   }
 

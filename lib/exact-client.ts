@@ -173,23 +173,33 @@ export const getTransactionLinesForJaar = cache(async (jaar: number): Promise<Tr
   const cached = await readCache<TransactionLine>(`tx-${jaar}`);
   if (cached) return cached;
 
-  // Cache leeg — alleen Make.com (via /api/exact/warm-cache) mag Exact Online aanroepen.
-  // Het dashboard toont een vriendelijke "data wordt geladen" melding.
-  throw new Error(`${CACHE_KOUD}:tx-${jaar}`);
+  // Cache koud — warm direct op (zelf-herstellend).
+  // Eerste bezoek na cache-expiry duurt 10–40s; elk volgend bezoek laadt direct.
+  console.log(`[exact-client] Cache koud voor tx-${jaar}, warmt direct op...`);
+  const nu = new Date();
+  const maxPeriode = jaar === nu.getFullYear() ? nu.getMonth() + 1 : 12;
+  await warmTransactionLines(jaar, maxPeriode);
+  return (await readCache<TransactionLine>(`tx-${jaar}`)) ?? [];
 });
 
 export const getSalesInvoicesForJaar = cache(async (jaar: number): Promise<SalesInvoiceLine[]> => {
   const cached = await readCache<SalesInvoiceLine>(`si-${jaar}`);
   if (cached) return cached;
 
-  throw new Error(`${CACHE_KOUD}:si-${jaar}`);
+  // Cache koud — warm direct op (zelf-herstellend).
+  console.log(`[exact-client] Cache koud voor si-${jaar}, warmt direct op...`);
+  await warmSalesInvoices(jaar);
+  return (await readCache<SalesInvoiceLine>(`si-${jaar}`)) ?? [];
 });
 
 export const getReceivablesData = cache(async (): Promise<unknown[]> => {
   const cached = await readCache<unknown>("recv");
   if (cached) return cached;
 
-  throw new Error(`${CACHE_KOUD}:recv`);
+  // Cache koud — warm direct op (zelf-herstellend).
+  console.log(`[exact-client] Cache koud voor recv, warmt direct op...`);
+  await warmReceivables();
+  return (await readCache<unknown>("recv")) ?? [];
 });
 
 // ─── Cache warm-up functies (gebruikt door /api/exact/warm-cache) ──────────────

@@ -3,8 +3,7 @@ import {
   getResultaatAlleMandenVoorJaar,
   getOpenstaandeFacturen,
 } from "@/lib/exact-queries";
-import { isExactGekoppeld, CACHE_KOUD } from "@/lib/exact-client";
-import DataLaadtBanner from "@/components/DataLaadtBanner";
+import { isExactGekoppeld } from "@/lib/exact-client";
 import KpiCard from "@/components/KpiCard";
 import PaginaHeader from "@/components/PaginaHeader";
 import TrendLijnGrafiek from "@/components/TrendLijnGrafiek";
@@ -45,7 +44,6 @@ export default async function DashboardPage() {
     alleMandenVorig = await getResultaatAlleMandenVoorJaar(jaar - 1);
     facturen = await getOpenstaandeFacturen();
   } catch (err) {
-    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
         <p className="text-red-600 font-semibold">Fout bij laden van Exact Online data</p>

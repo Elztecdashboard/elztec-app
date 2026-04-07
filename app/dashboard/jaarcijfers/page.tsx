@@ -1,6 +1,4 @@
 import { getResultaatAlleMandenVoorJaar } from "@/lib/exact-queries";
-import { CACHE_KOUD } from "@/lib/exact-client";
-import DataLaadtBanner from "@/components/DataLaadtBanner";
 import KpiCard from "@/components/KpiCard";
 import PaginaHeader from "@/components/PaginaHeader";
 import StaafGrafiek from "@/components/StaafGrafiek";
@@ -27,7 +25,6 @@ export default async function JaarcijfersPage({
       getResultaatAlleMandenVoorJaar(geselecteerdJaar - 1),
     ]);
   } catch (err) {
-    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
         <p className="text-red-600 font-semibold">Fout bij laden van jaarcijfers</p>

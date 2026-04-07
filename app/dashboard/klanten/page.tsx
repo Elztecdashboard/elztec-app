@@ -1,6 +1,4 @@
 import { getKlantenVergelijking, getOpenstaandeFacturen } from "@/lib/exact-queries";
-import { CACHE_KOUD } from "@/lib/exact-client";
-import DataLaadtBanner from "@/components/DataLaadtBanner";
 import PaginaHeader from "@/components/PaginaHeader";
 import Link from "next/link";
 import { formatBedrag } from "@/lib/utils";
@@ -25,7 +23,6 @@ export default async function KlantenPage({
       getOpenstaandeFacturen(),
     ]);
   } catch (err) {
-    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
         <p className="text-red-600 font-semibold">Fout bij laden van klantanalyse</p>

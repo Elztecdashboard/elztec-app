@@ -1,8 +1,6 @@
 import FacturenTabs from "@/components/FacturenTabs";
 import FacturenExport from "@/components/FacturenExport";
 import { getOpenstaandeFacturen } from "@/lib/exact-queries";
-import { CACHE_KOUD } from "@/lib/exact-client";
-import DataLaadtBanner from "@/components/DataLaadtBanner";
 import PaginaHeader from "@/components/PaginaHeader";
 import { Receivable } from "@/types";
 
@@ -22,7 +20,6 @@ export default async function FacturenPage() {
   try {
     facturen = await getOpenstaandeFacturen();
   } catch (err) {
-    if (String(err).includes(CACHE_KOUD)) return <DataLaadtBanner />;
     facturen = [];
   }
   const totaal = facturen.reduce((s, f) => s + Number(f.TransactionAmountDC), 0);
