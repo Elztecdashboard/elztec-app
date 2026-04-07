@@ -151,8 +151,9 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (resp.status !== 429) break;
-      const retryAfter = Number(resp.headers.get("Retry-After") ?? 2);
-      await sleep(Math.min(retryAfter, 5) * 1000);
+      const retryAfter = Number(resp.headers.get("Retry-After") ?? 5);
+      // Respecteer Retry-After volledig (max 45s zodat we binnen maxDuration=60 blijven)
+      await sleep(Math.min(retryAfter, 45) * 1000);
     }
     if (!resp!.ok) throw new Error(`Exact API fout: ${resp!.status} ${path}`);
     const json = await resp!.json() as { d: { results: unknown[]; __next?: string } };
