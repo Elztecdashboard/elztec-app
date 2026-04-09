@@ -24,19 +24,18 @@ export const maxDuration = 60;
  * Make.com roept elke sleutel sequentieel aan (één HTTP module per sleutel)
  * om Exact Online rate limits te voorkomen.
  */
-// POST wordt nooit gecached door Vercel/CDN — GET wel.
-// Dit is de enige betrouwbare fix voor het Vercel edge caching probleem.
-export async function POST(req: NextRequest) {
+// Gedeelde handler voor GET en POST — cron-job.org gebruikt GET met ?key=...
+// force-dynamic + Cache-Control: no-store voorkomt dat Vercel GET-responses cachet.
+async function handleRequest(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Lees key uit query param OF JSON body — Make.com stuurt query params soms
-  // niet mee bij POST-requests; dan staat de key in de JSON body.
+  // Lees key uit query param OF JSON body
   let key = req.nextUrl.searchParams.get("key");
-  if (!key) {
+  if (!key && req.method === "POST") {
     try {
       const body = await req.json();
       key = body?.key ?? null;
@@ -91,4 +90,14 @@ export async function POST(req: NextRequest) {
     console.error("[warm-cache]", key, e);
     return NextResponse.json({ ok: false, key, error: String(e) }, { status: 500 });
   }
+}
+
+// GET: cron-job.org gebruikt GET met ?key=... en Authorization header
+export async function GET(req: NextRequest) {
+  return handleRequest(req);
+}
+
+// POST: backwards compatibel
+export async function POST(req: NextRequest) {
+  return handleRequest(req);
 }
