@@ -6,15 +6,9 @@ const BASE_URL = "https://start.exactonline.nl/api/v1";
 const TOKEN_URL = "https://start.exactonline.nl/api/oauth2/token";
 const DIVISION = Number(process.env.EXACT_DIVISION || 2377678);
 
-// Cache TTL: 20 minuten. Make.com warmt de cache op elke 8 minuten
-// → cache is altijd warm, gebruikers raken nooit een cold start.
-const CACHE_TTL_MS = 40 * 60 * 1000; // 40 min — ruim boven het 8-minuten interval van Make.com
+// Cache TTL: 40 minuten. Cron-job.org warmt elke 10 minuten op → cache altijd warm.
+const CACHE_TTL_MS = 40 * 60 * 1000;
 
-// Marker voor "cache koud" fouten (legacy, niet meer in gebruik)
-export const CACHE_KOUD = "CACHE_KOUD";
-
-// Marker voor "Exact Online koppeling verlopen" — refresh token ongeldig.
-// Admin moet opnieuw koppelen via /exact/connect.
 export const EXACT_DISCONNECTED = "EXACT_DISCONNECTED";
 
 // ─── Types voor gecachede datasets ────────────────────────────────────────────
@@ -54,11 +48,21 @@ async function fetchNewTokens(refreshToken: string): Promise<{
   if (!resp.ok) {
     const errText = await resp.text();
     console.error("[fetchNewTokens] Refresh mislukt:", resp.status, errText);
+
+    // "access_token not expired" = token is nog geldig, geen actie nodig
     if (errText.includes("access_token not expired")) return null;
-    // invalid_grant = refresh token is verlopen of ingetrokken → admin moet opnieuw koppelen
+
+    // Race condition: een ander proces heeft dit refresh token net gebruikt.
+    // De aanroeper kan dan het verse token opnieuw uit de database lezen.
+    if (errText.includes("Old refresh token")) {
+      throw new Error("RACE_CONDITION: ander proces refreshte het token net eerder");
+    }
+
+    // Refresh token is echt verlopen of ingetrokken → opnieuw koppelen vereist
     if (errText.includes("invalid_grant") || errText.includes("invalid_client") || resp.status === 400) {
       throw new Error(`${EXACT_DISCONNECTED}: Exact Online refresh token ongeldig. Ga naar /exact/connect.`);
     }
+
     throw new Error(`Exact token vernieuwen mislukt (${resp.status}). Probeer later opnieuw.`);
   }
 
@@ -85,11 +89,12 @@ async function saveTokens(
   });
 }
 
-// TOKEN KEEPER PATROON:
-// Make.com vernieuwt het token elke 8 minuten proactief. Gebruikers refreshen nooit
-// actief — zij lezen alleen een vers token uit Supabase.
-// Race condition guard: als updated_at < 30s geleden, heeft een ander proces het token
-// net ververst. Gebruik dat token direct, ook al lijkt het bijna verlopen.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Haalt een geldig access token op. Refresht het token als het bijna verlopen is.
+// Race condition bescherming: als twee processen tegelijk proberen te refreshen,
+// wint er één. De verliezer wacht even en leest het verse token dat de winnaar
+// heeft opgeslagen — in plaats van te crashen.
 const getValidAccessToken = cache(async (): Promise<{ token: string; division: number }> => {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
@@ -104,19 +109,38 @@ const getValidAccessToken = cache(async (): Promise<{ token: string; division: n
 
   const row = data as ExactTokenRow;
   const expiresAt = new Date(row.expires_at).getTime();
-  const updatedAt = new Date(row.updated_at).getTime();
-  const recentlyRefreshed = Date.now() - updatedAt < 30_000;
 
-  if (expiresAt > Date.now() + 180_000 || recentlyRefreshed) {
+  // Token is nog minstens 2 minuten geldig → direct gebruiken
+  if (expiresAt > Date.now() + 2 * 60_000) {
     return { token: row.access_token, division: row.division };
   }
 
-  // Noodgeval: token verlopen én niet recent ververst (Make.com heeft het gemist)
-  console.warn("[getValidAccessToken] Noodfallback: token niet op tijd ververst door Make.com");
-  const newTokens = await fetchNewTokens(row.refresh_token);
-  if (!newTokens) return { token: row.access_token, division: row.division };
-  await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
-  return { token: newTokens.access_token, division: DIVISION };
+  // Token verloopt binnenkort (of is verlopen) → verversen
+  console.log("[getValidAccessToken] Token verloopt binnenkort, wordt ververst...");
+  try {
+    const newTokens = await fetchNewTokens(row.refresh_token);
+    if (!newTokens) {
+      // Exact zei "nog niet verlopen" → gebruik het huidige token
+      return { token: row.access_token, division: row.division };
+    }
+    await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
+    return { token: newTokens.access_token, division: DIVISION };
+  } catch (e) {
+    // Race condition: ander proces refreshte net eerder → lees het verse token
+    if (String(e).includes("RACE_CONDITION")) {
+      console.log("[getValidAccessToken] Race condition — lees vers token uit database...");
+      await sleep(1500);
+      const { data: fresh } = await supabase
+        .from("exact_tokens")
+        .select("access_token, division")
+        .eq("division", DIVISION)
+        .single();
+      if (fresh?.access_token) {
+        return { token: fresh.access_token, division: DIVISION };
+      }
+    }
+    throw e;
+  }
 });
 
 // ─── Supabase cache helpers ────────────────────────────────────────────────────
@@ -145,8 +169,6 @@ async function writeCache(cacheKey: string, data: unknown[]): Promise<void> {
 }
 
 // ─── Interne paginator (geen cache, geen side effects) ────────────────────────
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 async function fetchAllPages(path: string, token: string, division: number): Promise<unknown[]> {
   const results: unknown[] = [];
   let nextUrl: string | null = `${BASE_URL}/${division}/${path}`;
@@ -158,8 +180,6 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
       if (resp.status !== 429) break;
-      // Exact Online stuurt zelden Retry-After. Default 30s zorgt dat de rate-limit
-      // window (waarschijnlijk ~30s) reset vóór de volgende poging.
       const retryAfter = Number(resp.headers.get("Retry-After") ?? 30);
       await sleep(Math.min(retryAfter, 45) * 1000);
     }
@@ -173,16 +193,11 @@ async function fetchAllPages(path: string, token: string, division: number): Pro
 }
 
 // ─── Gecachede dataset-functies (gebruikt door dashboard-pagina's) ─────────────
-// React cache() zorgt dat binnen één render dezelfde dataset maar één keer
-// uit Supabase gelezen wordt, ook al roepen meerdere functies hem aan.
-
 export const getTransactionLinesForJaar = cache(async (jaar: number): Promise<TransactionLine[]> => {
   const cached = await readCache<TransactionLine>(`tx-${jaar}`);
   if (cached) return cached;
 
-  // Cache koud — warm direct op (zelf-herstellend).
-  // Eerste bezoek na cache-expiry duurt 10–40s; elk volgend bezoek laadt direct.
-  console.log(`[exact-client] Cache koud voor tx-${jaar}, warmt direct op...`);
+  console.log(`[exact-client] Cache koud voor tx-${jaar}, warmt op...`);
   const nu = new Date();
   const maxPeriode = jaar === nu.getFullYear() ? nu.getMonth() + 1 : 12;
   await warmTransactionLines(jaar, maxPeriode);
@@ -193,8 +208,7 @@ export const getSalesInvoicesForJaar = cache(async (jaar: number): Promise<Sales
   const cached = await readCache<SalesInvoiceLine>(`si-${jaar}`);
   if (cached) return cached;
 
-  // Cache koud — warm direct op (zelf-herstellend).
-  console.log(`[exact-client] Cache koud voor si-${jaar}, warmt direct op...`);
+  console.log(`[exact-client] Cache koud voor si-${jaar}, warmt op...`);
   await warmSalesInvoices(jaar);
   return (await readCache<SalesInvoiceLine>(`si-${jaar}`)) ?? [];
 });
@@ -203,37 +217,41 @@ export const getReceivablesData = cache(async (): Promise<unknown[]> => {
   const cached = await readCache<unknown>("recv");
   if (cached) return cached;
 
-  // Cache koud — warm direct op (zelf-herstellend).
-  console.log(`[exact-client] Cache koud voor recv, warmt direct op...`);
+  console.log(`[exact-client] Cache koud voor recv, warmt op...`);
   await warmReceivables();
   return (await readCache<unknown>("recv")) ?? [];
 });
 
 // ─── Cache warm-up functies (gebruikt door /api/exact/warm-cache) ──────────────
-// Deze functies slaan de cache read over en halen altijd vers data op,
-// zodat Make.com de cache kan opwarmen vóór hij verloopt.
 
 export async function warmTransactionLines(jaar: number, maxPeriode = 12): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  // Exact Online ondersteunt geen $skip op TransactionLines en retourneert geen __next
-  // als resultaten exact gelijk zijn aan $top=1000. Fix: haal per FinancialPeriod op.
-  // maxPeriode: voor het huidig jaar alleen tot en met de huidige maand (bijv. 4 voor april),
-  // voor het vorig jaar altijd 12. Dit beperkt het totaal API-calls en voorkomt rate limits.
+  const nu = new Date();
+  const isHuidigJaar = jaar === nu.getFullYear();
   const allLines: unknown[] = [];
-  for (let periode = 1; periode <= maxPeriode; periode++) {
-    if (periode > 1) await sleep(700); // Voorkom Exact Online rate limiting
-    const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
+
+  if (!isHuidigJaar) {
+    // Vorig jaar: één jaarquery. Data is definitief, nooit meer dan ~500 regels
+    // voor een klein bedrijf. Klaar in 1-3 seconden i.p.v. 12 losse aanroepen.
+    const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar}`;
     const lines = await fetchAllPages(path, token, division);
     allLines.push(...lines);
+  } else {
+    // Huidig jaar: per periode ophalen om Exact rate limits te respecteren.
+    for (let periode = 1; periode <= maxPeriode; periode++) {
+      if (periode > 1) await sleep(500);
+      const path = `financialtransaction/TransactionLines?$top=1000&$select=GLAccountCode,GLAccountDescription,AmountDC,FinancialPeriod&$filter=FinancialYear eq ${jaar} and FinancialPeriod eq ${periode}`;
+      const lines = await fetchAllPages(path, token, division);
+      allLines.push(...lines);
+    }
   }
+
   await writeCache(`tx-${jaar}`, allLines);
   return allLines.length;
 }
 
 export async function warmSalesInvoices(jaar: number): Promise<number> {
   const { token, division } = await getValidAccessToken();
-  // SalesInvoices heeft <100 records/jaar — één jaarquery is voldoende.
-  // fetchAllPages volgt __next als er onverwacht meer dan 1000 zijn.
   const path = `salesinvoice/SalesInvoices?$top=1000&$select=OrderedByName,AmountDC,InvoiceDate&$filter=InvoiceDate ge datetime'${jaar}-01-01T00:00:00' and InvoiceDate lt datetime'${jaar + 1}-01-01T00:00:00'`;
   const raw = await fetchAllPages(path, token, division);
   const invoices = convertODataDates(raw) as unknown[];
@@ -256,8 +274,6 @@ export async function warmReceivables(): Promise<number> {
 }
 
 // ─── OData datum-converter ────────────────────────────────────────────────────
-// Exact Online retourneert datums als "/Date(1700870400000)/" (OData v3 formaat).
-// Converteer ze naar ISO-strings zodat new Date(...) overal correct werkt.
 function convertODataDates(obj: unknown): unknown {
   if (typeof obj === "string") {
     const m = obj.match(/^\/Date\((\d+)\)\/$/);
@@ -272,7 +288,7 @@ function convertODataDates(obj: unknown): unknown {
   return obj;
 }
 
-// ─── Low-level helpers (voor backwards compat en /exact/callback) ──────────────
+// ─── Low-level helpers ────────────────────────────────────────────────────────
 export async function exactFetch(path: string): Promise<unknown> {
   const { token, division } = await getValidAccessToken();
   const url = `${BASE_URL}/${division}/${path}`;
@@ -297,48 +313,16 @@ export async function isExactGekoppeld(): Promise<boolean> {
   }
 }
 
-// Wordt aangeroepen door de cron-job.org route (elke 9 minuten).
-// Nieuwe logica: refresh ALTIJD, tenzij het token minder dan 5 minuten geleden
-// al ververst is. Voorkomt dubbele refresh bij herhaalde aanroepen (zou
-// anders invalid_grant geven omdat de refresh token single-use is).
-export async function refreshExactTokenProactive(): Promise<{ refreshed: boolean; reason?: string }> {
-  const supabase = createSupabaseServerClient();
-  const { data } = await supabase
-    .from("exact_tokens")
-    .select("*")
-    .eq("division", DIVISION)
-    .single();
-
-  if (!data) throw new Error("Geen token gevonden in Supabase");
-
-  const row = data as ExactTokenRow;
-  const updatedAt = new Date(row.updated_at).getTime();
-  const minutenGeleden = Math.floor((Date.now() - updatedAt) / 60_000);
-
-  // Blokkeer als we minder dan 5 minuten geleden al hebben ververst.
-  // Dit beschermt tegen dubbele cron-aanroepen of retries.
-  if (Date.now() - updatedAt < 5 * 60_000) {
-    return { refreshed: false, reason: `Reeds ververst ${minutenGeleden}m geleden — overgeslagen` };
-  }
-
-  const newTokens = await fetchNewTokens(row.refresh_token);
-  if (!newTokens) return { refreshed: false, reason: "fetchNewTokens gaf null terug" };
-  await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
-  return { refreshed: true };
-}
-
 // Geeft terug wanneer de cache voor het huidige jaar voor het laatst is bijgewerkt.
-// Gebruikt door het dashboard om "Bijgewerkt: X minuten geleden" te tonen.
 export async function getCacheStatus(): Promise<{ cachedAt: Date | null }> {
   const supabase = createSupabaseServerClient();
   const { data } = await supabase
     .from("exact_cache")
     .select("expires_at")
-    .eq("cache_key", "tx-current")
+    .eq("cache_key", `tx-${new Date().getFullYear()}`)
     .maybeSingle();
 
   if (!data?.expires_at) return { cachedAt: null };
-  // cached_at = expires_at − TTL (40 minuten)
   const cachedAt = new Date(new Date(data.expires_at).getTime() - CACHE_TTL_MS);
   return { cachedAt };
 }
