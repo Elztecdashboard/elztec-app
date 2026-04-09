@@ -297,8 +297,11 @@ export async function isExactGekoppeld(): Promise<boolean> {
   }
 }
 
-// Wordt aangeroepen door de /api/exact/refresh cron route (Make.com, elke 8 min)
-export async function refreshExactTokenProactive(): Promise<{ refreshed: boolean }> {
+// Wordt aangeroepen door de cron-job.org route (elke 9 minuten).
+// Nieuwe logica: refresh ALTIJD, tenzij het token minder dan 5 minuten geleden
+// al ververst is. Voorkomt dubbele refresh bij herhaalde aanroepen (zou
+// anders invalid_grant geven omdat de refresh token single-use is).
+export async function refreshExactTokenProactive(): Promise<{ refreshed: boolean; reason?: string }> {
   const supabase = createSupabaseServerClient();
   const { data } = await supabase
     .from("exact_tokens")
@@ -309,14 +312,33 @@ export async function refreshExactTokenProactive(): Promise<{ refreshed: boolean
   if (!data) throw new Error("Geen token gevonden in Supabase");
 
   const row = data as ExactTokenRow;
-  const expiresAt = new Date(row.expires_at).getTime();
+  const updatedAt = new Date(row.updated_at).getTime();
+  const minutenGeleden = Math.floor((Date.now() - updatedAt) / 60_000);
 
-  if (expiresAt > Date.now() + 180_000) {
-    return { refreshed: false };
+  // Blokkeer als we minder dan 5 minuten geleden al hebben ververst.
+  // Dit beschermt tegen dubbele cron-aanroepen of retries.
+  if (Date.now() - updatedAt < 5 * 60_000) {
+    return { refreshed: false, reason: `Reeds ververst ${minutenGeleden}m geleden — overgeslagen` };
   }
 
   const newTokens = await fetchNewTokens(row.refresh_token);
-  if (!newTokens) return { refreshed: false };
+  if (!newTokens) return { refreshed: false, reason: "fetchNewTokens gaf null terug" };
   await saveTokens(newTokens, row.company_name ?? "ElzTec B.V.");
   return { refreshed: true };
+}
+
+// Geeft terug wanneer de cache voor het huidige jaar voor het laatst is bijgewerkt.
+// Gebruikt door het dashboard om "Bijgewerkt: X minuten geleden" te tonen.
+export async function getCacheStatus(): Promise<{ cachedAt: Date | null }> {
+  const supabase = createSupabaseServerClient();
+  const { data } = await supabase
+    .from("exact_cache")
+    .select("expires_at")
+    .eq("cache_key", "tx-current")
+    .maybeSingle();
+
+  if (!data?.expires_at) return { cachedAt: null };
+  // cached_at = expires_at − TTL (40 minuten)
+  const cachedAt = new Date(new Date(data.expires_at).getTime() - CACHE_TTL_MS);
+  return { cachedAt };
 }

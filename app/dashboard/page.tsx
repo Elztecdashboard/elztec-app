@@ -3,7 +3,7 @@ import {
   getResultaatAlleMandenVoorJaar,
   getOpenstaandeFacturen,
 } from "@/lib/exact-queries";
-import { isExactGekoppeld } from "@/lib/exact-client";
+import { isExactGekoppeld, getCacheStatus } from "@/lib/exact-client";
 import ExactFout from "@/components/ExactFout";
 import KpiCard from "@/components/KpiCard";
 import PaginaHeader from "@/components/PaginaHeader";
@@ -35,6 +35,17 @@ export default async function DashboardPage() {
       </div>
     );
   }
+
+  const { cachedAt } = await getCacheStatus();
+  const bijgewerktLabel = cachedAt
+    ? (() => {
+        const minuten = Math.floor((Date.now() - cachedAt.getTime()) / 60_000);
+        if (minuten < 2) return "zojuist bijgewerkt";
+        if (minuten < 60) return `${minuten} minuten geleden bijgewerkt`;
+        const uren = Math.floor(minuten / 60);
+        return `${uren} uur geleden bijgewerkt`;
+      })()
+    : null;
 
   let ytdHuidig, ytdVorig, alleMandenHuidig, alleMandenVorig, facturen;
   try {
@@ -76,7 +87,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      <PaginaHeader titel="Overzicht" subtitel={`Dashboard ${jaar}`} />
+      <div className="flex items-center justify-between">
+        <PaginaHeader titel="Overzicht" subtitel={`Dashboard ${jaar}`} />
+        {bijgewerktLabel && (
+          <span className="text-xs text-gray-400 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+            Data {bijgewerktLabel}
+          </span>
+        )}
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
