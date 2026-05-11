@@ -90,11 +90,13 @@ export default async function ExactConnectPage({ searchParams }: Props) {
         )}
       </div>
 
-      <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-xs text-gray-500 space-y-1">
-        <p className="font-medium text-gray-600">Debug info</p>
-        <p>Redirect URI: <span className="font-mono">{baseUrl}/exact/callback</span></p>
-        <p>Division: <span className="font-mono">{process.env.EXACT_DIVISION ?? "2377678 (default)"}</span></p>
-      </div>
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-xs text-gray-500 space-y-1">
+          <p className="font-medium text-gray-600">Debug info</p>
+          <p>Redirect URI: <span className="font-mono">{baseUrl}/exact/callback</span></p>
+          <p>Division: <span className="font-mono">{process.env.EXACT_DIVISION ?? "2377678 (default)"}</span></p>
+        </div>
+      )}
     </div>
   );
 }

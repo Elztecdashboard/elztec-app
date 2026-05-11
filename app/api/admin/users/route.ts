@@ -21,6 +21,13 @@ function createSessionClient(req: NextRequest) {
   );
 }
 
+function checkOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get('origin')
+  if (!origin) return true // server-to-server (cron, etc.)
+  const base = (process.env.NEXT_PUBLIC_BASE_URL ?? '').replace(/\/$/, '')
+  return origin === base
+}
+
 async function requireAdmin(req: NextRequest) {
   const sessionClient = createSessionClient(req);
   const {
@@ -79,6 +86,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) return NextResponse.json({ error: 'Verboden' }, { status: 403 });
   const auth = await requireAdmin(req);
   if (auth.error) return auth.error;
   const { supabase } = auth;
@@ -107,6 +115,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  if (!checkOrigin(req)) return NextResponse.json({ error: 'Verboden' }, { status: 403 });
   const auth = await requireAdmin(req);
   if (auth.error) return auth.error;
   const { supabase } = auth;
@@ -141,6 +150,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!checkOrigin(req)) return NextResponse.json({ error: 'Verboden' }, { status: 403 });
   const auth = await requireAdmin(req);
   if (auth.error) return auth.error;
   const { supabase } = auth;

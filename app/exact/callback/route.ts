@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenResp.json();
 
   if (!tokens.access_token || !tokens.refresh_token) {
-    console.error("[callback] Tokens ontvangen maar onvolledig:", JSON.stringify(tokens));
+    console.error("[callback] Tokens ontvangen maar onvolledig (velden aanwezig:", Object.keys(tokens).join(", "), ")");
     return NextResponse.redirect(new URL("/exact/connect?fout=token_onvolledig", req.url));
   }
 
