@@ -11,13 +11,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Database (Supabase)
 
 **Project**: `bbxqfaxvakwjrdkhnhug`
-**DDL uitvoeren**: via de Supabase CLI — project is gelinkt, voer SQL altijd zo uit:
+**DDL uitvoeren** — volg altijd dit volledige patroon:
+
+**Stap 1: schrijf het SQL-bestand**
+Sla de migratie op als `supabase/<naam>.sql` (history + review).
+
+**Stap 2: uitvoeren via CLI**
+```bash
+npx supabase db query --linked --file supabase/<naam>.sql
+```
+Of inline voor kleine queries:
 ```bash
 npx supabase db query --linked << 'SQL'
 -- jouw SQL hier
 SQL
 ```
-Sla migraties ook op als `.sql`-bestand in `supabase/` zodat er een history is. Nooit kopiëren/plakken via het dashboard.
+
+**Stap 3: committen**
+```bash
+git add supabase/<naam>.sql
+git commit -m "db: <omschrijving van de migratie>"
+```
+
+**Stap 4: deployen naar Vercel**
+```bash
+npx vercel --prod
+```
+
+Nooit kopiëren/plakken via het Supabase dashboard. Nooit stoppen na stap 2 — altijd committen én deployen.
 
 ### Tabeloverzicht en toegangsmodel
 
