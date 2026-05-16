@@ -11,7 +11,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Database (Supabase)
 
 **Project**: `bbxqfaxvakwjrdkhnhug`
-**DDL uitvoeren**: via Supabase dashboard SQL editor (`/sql/new`).
+**DDL uitvoeren**: via de Supabase CLI — project is gelinkt, voer SQL altijd zo uit:
+```bash
+npx supabase db query --linked << 'SQL'
+-- jouw SQL hier
+SQL
+```
+Sla migraties ook op als `.sql`-bestand in `supabase/` zodat er een history is. Nooit kopiëren/plakken via het dashboard.
 
 ### Tabeloverzicht en toegangsmodel
 
