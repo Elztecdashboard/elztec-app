@@ -17,8 +17,10 @@
 GRANT SELECT ON public.user_roles
   TO authenticated;
 
--- exact_tokens en exact_cache krijgen bewust GEEN grant aan authenticated of anon.
+-- exact_tokens en exact_cache: bestaande grants intrekken + geen nieuwe toekennen.
 -- Toegang uitsluitend via server-side service_role (warm-cache cron + callback route).
+REVOKE ALL ON public.exact_tokens FROM anon, authenticated;
+REVOKE ALL ON public.exact_cache  FROM anon, authenticated;
 
 -- Verificatie
 SELECT grantee, table_name, privilege_type
